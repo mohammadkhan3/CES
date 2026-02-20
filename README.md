@@ -20,7 +20,10 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
-- if pip doesn't work, command: python -m pip install -r requirements.txt
+- if pip doesn't work, command: 
+```bash
+python -m pip install -r requirements.txt
+```
 
 - create backend environment file (CES/backend/.env), in the file add this line:
 PORT=5000
