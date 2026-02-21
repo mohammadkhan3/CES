@@ -27,6 +27,8 @@ python -m pip install -r requirements.txt
 
 - create backend environment file (CES/backend/.env), in the file add this line:
 PORT=5000
+MONGO_URI=[REPLACE_ME]
+MONGO_DB=ces_db
 
 - create .gitignore file with these contents:
 .venv/
