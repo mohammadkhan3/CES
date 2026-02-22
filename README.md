@@ -24,6 +24,10 @@ pip install -r requirements.txt
 ```bash
 python -m pip install -r requirements.txt
 ```
+- dependencies for db:
+```bash
+pip install certifi pymongo python-dotenv
+```
 
 - create backend environment file (CES/backend/.env), in the file add these lines:
 PORT=5000 

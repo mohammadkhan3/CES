@@ -1,8 +1,8 @@
+import re
 from flask import Blueprint, request, jsonify
 from bson import ObjectId
 from app.db import get_movies_collection
 from app.utils import movie_to_json
-
 
 movies_bp = Blueprint("movies", __name__)
 
@@ -22,6 +22,7 @@ def get_movie_details(movie_id: str):
 
     return jsonify({"data": movie_to_json(doc)}), 200
 
+
 # 2.3 Search title function
 @movies_bp.get("/movies/search")
 def search_movies():
@@ -29,11 +30,23 @@ def search_movies():
     if not title:
         return jsonify({"message": "Missing required param: title"}), 400
 
+    safe_title = re.escape(title)
+
     movies = get_movies_collection()
-    cursor = movies.find({"title": {"$regex": title, "$options": "i"}})
+    cursor = movies.find({
+        "title": {"$regex": safe_title, "$options": "i"}
+    })
 
     results = [movie_to_json(doc) for doc in cursor]
+
+    if not results:
+        return jsonify({
+            "message": "No movies match your search",
+            "data": []
+        }), 200
+
     return jsonify({"data": results}), 200
+
 
 # 2.4 Filter function
 @movies_bp.get("/movies/filter")
@@ -42,8 +55,19 @@ def filter_movies():
     if not genre:
         return jsonify({"message": "Missing required param: genre"}), 400
 
+    safe_genre = re.escape(genre)
+
     movies = get_movies_collection()
-    cursor = movies.find({"genre": {"$regex": f"^{genre}$", "$options": "i"}})
+    cursor = movies.find({
+        "genre": {"$regex": f"^{safe_genre}$", "$options": "i"}
+    })
 
     results = [movie_to_json(doc) for doc in cursor]
+
+    if not results:
+        return jsonify({
+            "message": "No movies match the filter criteria",
+            "data": []
+        }), 200
+
     return jsonify({"data": results}), 200
