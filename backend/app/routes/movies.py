@@ -6,6 +6,21 @@ from app.utils import movie_to_json
 
 movies_bp = Blueprint("movies", __name__)
 
+# 2.1 Home Page Function
+@movies_bp.get("/movies/homepage")
+def get_homepage():
+    movies = get_movies_collection()
+    
+    currently_running = movies.find({"status": "currently_running"})
+    coming_soon = movies.find({"status": "coming_soon"})
+    
+    return jsonify({
+        "data": {
+            "currently_running": [movie_to_json(doc) for doc in currently_running],
+            "coming_soon": [movie_to_json(doc) for doc in coming_soon]
+        }
+    }), 200
+
 # 2.2 Movie details function
 @movies_bp.get("/movies/<string:movie_id>")
 def get_movie_details(movie_id: str):
