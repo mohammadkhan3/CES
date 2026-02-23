@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import MovieModal from "./components/MovieModal";
 
 type Movie = {
   id: string;
@@ -24,32 +25,36 @@ function SkeletonCard() {
   );
 }
 
-function MovieCard({ movie, comingSoon }: { movie: Movie; comingSoon?: boolean }) {
+function MovieCard({ movie, comingSoon, onClick }: { movie: Movie; comingSoon?: boolean; onClick: () => void }) {
   return (
-    <div className="text-center">
-      <div className="relative">
+    <div className="text-center group cursor-pointer" onClick={onClick}>
+      <div className="relative overflow-hidden border border-transparent group-hover:border-zinc-700 transition duration-300">
         {comingSoon && (
-          <div className="absolute top-3 right-3 bg-red-600 text-white text-xs font-bold px-3 py-1 rotate-12 shadow-lg">
+          <div className="absolute top-3 right-3 z-10 bg-red-600 text-white text-xs font-bold px-3 py-1 rotate-12 shadow-lg">
             COMING SOON!
           </div>
         )}
 
-        <div className="w-full h-56 bg-zinc-900 overflow-hidden">
+        <div className="w-full h-80 bg-zinc-900 overflow-hidden relative">
           {movie.poster_url ? (
             <img
               src={movie.poster_url}
               alt={movie.title}
-              className="w-full h-56 object-cover"
+              className="w-full h-full object-cover group-hover:scale-105 transition duration-500 opacity-90 group-hover:opacity-100"
             />
           ) : (
-            <div className="w-full h-56 flex items-center justify-center text-white/40">
+            <div className="w-full h-full flex items-center justify-center text-white/40">
               Poster
             </div>
           )}
+          
+          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition duration-300 flex items-center justify-center">
+             <span className="border border-white px-4 py-2 text-xs uppercase tracking-widest">View Details</span>
+          </div>
         </div>
       </div>
 
-      <h3 className="mt-4 text-2xl tracking-wide uppercase">{movie.title}</h3>
+      <h3 className="mt-4 text-xl tracking-wide uppercase group-hover:text-red-500 transition">{movie.title}</h3>
     </div>
   );
 }
@@ -58,6 +63,9 @@ export default function HomePage() {
   const [running, setRunning] = useState<Movie[]>([]);
   const [comingSoon, setComingSoon] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // track which movie is clicked for the modal
+  const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -106,7 +114,7 @@ export default function HomePage() {
               ? Array.from({ length: 3 }).map((_, i) => (
                   <SkeletonCard key={`running-skel-${i}`} />
                 ))
-              : running.map((m) => <MovieCard key={m.id} movie={m} />)}
+              : running.map((m) => <MovieCard key={m.id} movie={m} onClick={() => setSelectedMovie(m)} />)}
           </div>
         </section>
 
@@ -121,11 +129,19 @@ export default function HomePage() {
                   <SkeletonCard key={`coming-skel-${i}`} />
                 ))
               : comingSoon.map((m) => (
-                  <MovieCard key={m.id} movie={m} comingSoon />
+                  <MovieCard key={m.id} movie={m} comingSoon onClick={() => setSelectedMovie(m)} />
                 ))}
           </div>
         </section>
       </div>
+
+      {/* render modal if a movie is selected */}
+      {selectedMovie && (
+        <MovieModal 
+          movie={selectedMovie} 
+          onClose={() => setSelectedMovie(null)} 
+        />
+      )}
     </div>
   );
 }
