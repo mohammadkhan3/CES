@@ -39,3 +39,31 @@ MONGO_DB=ces_db
 .env
 __pycache__/
 *.pyc
+
+## frontend set up
+
+- make sure that you have node.js downloaded:
+```bash
+node --version
+```
+- make sure that npm is installed
+```bash
+npm --version
+```
+- go to the front end directory
+```bash
+cd CES/frontend/cinema-ebooking
+```
+- install the frontend dependencies
+```bash
+npm install
+```
+- create frontend environment file (CES/frontend/cinema-ebooking/.env.local) and add this line:
+BACKEND_BASE_URL=http://localhost:5000
+
+- to run the frontend server
+``` bash
+npm run dev
+```
+
+- ensure that the backend is running before starting the frontend up.
