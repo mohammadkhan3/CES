@@ -30,8 +30,8 @@ pip install certifi pymongo python-dotenv
 ```
 
 - create backend environment file (CES/backend/.env), in the file add these lines:
-PORT=5000 
-MONGO_URI=[REPLACE_ME] 
+PORT=5000
+MONGO_URI=[REPLACE_ME]
 MONGO_DB=ces_db
 
 - create .gitignore file with these contents:
@@ -39,3 +39,8 @@ MONGO_DB=ces_db
 .env
 __pycache__/
 *.pyc
+
+- ## seed the database
+- after setting up your .env file, run:
+```bash
+python seed.py
