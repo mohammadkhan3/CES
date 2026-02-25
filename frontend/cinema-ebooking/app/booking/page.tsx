@@ -53,10 +53,10 @@ const BookingPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 py-12 px-4">
+    <div className="min-h-screen bg-gray-100 py-12 px-4 text-black">
       <div className="p-6 bg-white rounded-lg shadow-lg max-w-4xl mx-auto">
 
-        <h1 className="text-2xl font-bold text-center text-gray-800 mb-6">
+        <h1 className="text-2xl font-bold text-center mb-6">
           Booking Page (Prototype)
         </h1>
 
@@ -119,7 +119,7 @@ const BookingPage = () => {
         <div className="mb-8">
           {rows.map((row) => (
             <div key={row} className="flex justify-center mb-2">
-              <div className="w-6 flex items-center justify-center font-bold text-gray-600">
+              <div className="w-6 flex items-center justify-center font-bold text-black">
                 {row}
               </div>
               <div className="flex space-x-2">

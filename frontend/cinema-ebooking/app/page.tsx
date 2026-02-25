@@ -50,12 +50,29 @@ function MovieCard({ movie, comingSoon, onClick }: { movie: Movie; comingSoon?: 
           )}
 
           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition duration-300 flex items-center justify-center">
-            <span className="border border-white px-4 py-2 text-xs uppercase tracking-widest">View Details</span>
+            <span className="border border-white px-4 py-2 text-xs uppercase tracking-widest">
+              View Details
+            </span>
           </div>
         </div>
       </div>
 
-      <h3 className="mt-4 text-xl tracking-wide uppercase group-hover:text-red-500 transition">{movie.title}</h3>
+      <h3 className="mt-4 text-xl tracking-wide uppercase group-hover:text-red-500 transition">
+        {movie.title}
+      </h3>
+
+      {/* Showtimes */}
+      <div className="mt-3 flex justify-center gap-2 flex-wrap">
+        {["2:00 PM", "5:00 PM", "8:00 PM"].map((time) => (
+          <span
+            key={time}
+            className="text-xs px-3 py-1 border border-zinc-600 rounded text-zinc-300"
+          >
+            {time}
+          </span>
+        ))}
+      </div>
+
     </div>
   );
 }
