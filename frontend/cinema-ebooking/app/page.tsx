@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import MovieModal from "./components/MovieModal";
 
 type Movie = {
@@ -47,9 +48,9 @@ function MovieCard({ movie, comingSoon, onClick }: { movie: Movie; comingSoon?: 
               Poster
             </div>
           )}
-          
+
           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition duration-300 flex items-center justify-center">
-             <span className="border border-white px-4 py-2 text-xs uppercase tracking-widest">View Details</span>
+            <span className="border border-white px-4 py-2 text-xs uppercase tracking-widest">View Details</span>
           </div>
         </div>
       </div>
@@ -60,10 +61,13 @@ function MovieCard({ movie, comingSoon, onClick }: { movie: Movie; comingSoon?: 
 }
 
 export default function HomePage() {
+  const sp = useSearchParams();
+  const q = (sp.get("q") ?? "").trim();
+  const genre = (sp.get("genre") ?? "").trim();
   const [running, setRunning] = useState<Movie[]>([]);
   const [comingSoon, setComingSoon] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // track which movie is clicked for the modal
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
 
@@ -71,18 +75,33 @@ export default function HomePage() {
     async function load() {
       setLoading(true);
       try {
-        const res = await fetch("/api/movies/homepage", { cache: "no-store" });
+        // single proxy route: homepage handles optional q/genre
+        const params = new URLSearchParams();
+        if (q) params.set("q", q);
+        if (genre) params.set("genre", genre);
 
+        const url = params.toString()
+          ? `/api/movies/homepage?${params.toString()}`
+          : "/api/movies/homepage";
+
+        const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const json = await res.json();
 
-        const data = json?.data ?? {};
-        const r: Movie[] = Array.isArray(data.currently_running) ? data.currently_running : [];
-        const c: Movie[] = Array.isArray(data.coming_soon) ? data.coming_soon : [];
-
-        setRunning(r);
-        setComingSoon(c);
+        // If q or genre is set, Flask returns: { data: [...] }
+        if (q || genre) {
+          const list: Movie[] = Array.isArray(json?.data) ? json.data : [];
+          setRunning(list);
+          setComingSoon([]); // minimal: show results in the first section only
+        } else {
+          // Homepage returns: { data: { currently_running, coming_soon } }
+          const data = json?.data ?? {};
+          const r: Movie[] = Array.isArray(data.currently_running) ? data.currently_running : [];
+          const c: Movie[] = Array.isArray(data.coming_soon) ? data.coming_soon : [];
+          setRunning(r);
+          setComingSoon(c);
+        }
       } catch {
         setRunning([]);
         setComingSoon([]);
@@ -92,7 +111,7 @@ export default function HomePage() {
     }
 
     load();
-  }, []);
+  }, [q, genre]);
 
   const showRunningPlaceholders = loading || running.length === 0;
   const showComingPlaceholders = loading || comingSoon.length === 0;
@@ -112,8 +131,8 @@ export default function HomePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-12">
             {showRunningPlaceholders
               ? Array.from({ length: 3 }).map((_, i) => (
-                  <SkeletonCard key={`running-skel-${i}`} />
-                ))
+                <SkeletonCard key={`running-skel-${i}`} />
+              ))
               : running.map((m) => <MovieCard key={m.id} movie={m} onClick={() => setSelectedMovie(m)} />)}
           </div>
         </section>
@@ -126,20 +145,20 @@ export default function HomePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-12">
             {showComingPlaceholders
               ? Array.from({ length: 3 }).map((_, i) => (
-                  <SkeletonCard key={`coming-skel-${i}`} />
-                ))
+                <SkeletonCard key={`coming-skel-${i}`} />
+              ))
               : comingSoon.map((m) => (
-                  <MovieCard key={m.id} movie={m} comingSoon onClick={() => setSelectedMovie(m)} />
-                ))}
+                <MovieCard key={m.id} movie={m} comingSoon onClick={() => setSelectedMovie(m)} />
+              ))}
           </div>
         </section>
       </div>
 
       {/* render modal if a movie is selected */}
       {selectedMovie && (
-        <MovieModal 
-          movie={selectedMovie} 
-          onClose={() => setSelectedMovie(null)} 
+        <MovieModal
+          movie={selectedMovie}
+          onClose={() => setSelectedMovie(null)}
         />
       )}
     </div>
