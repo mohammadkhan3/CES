@@ -1,6 +1,7 @@
 # CES
 Cinema E-Booking System -- SWE
 
+1)
 ## backend set up
 - make sure that you have python downloaded
 command in terminal: 
@@ -8,13 +9,15 @@ command in terminal:
 python3 --version
 ```
 
+2)
 - create & activate virtual environment (might be different on windows/powershell system)
 ```bash 
 cd CES/backend
 python3 -m venv .venv
 source .venv/bin/activate
-```
 
+```
+2)
 - install dependencies for backend:
 ```bash
 python -m pip install --upgrade pip
@@ -29,9 +32,10 @@ python -m pip install -r requirements.txt
 pip install certifi pymongo python-dotenv
 ```
 
+4)
 - create backend environment file (CES/backend/.env), in the file add these lines:
-PORT=5000 
-MONGO_URI=[REPLACE_ME] 
+PORT=5000
+MONGO_URI=[REPLACE_ME]
 MONGO_DB=ces_db
 
 - create .gitignore file with these contents:
@@ -40,30 +44,21 @@ MONGO_DB=ces_db
 __pycache__/
 *.pyc
 
-## frontend set up
+6)
+Testing:
+- TERMINAL 1 - Start the backend, but seed database first:
+```bash
+cd backend
+source .venv/bin/activate
+python seed.py
+python run.py
+```
 
-- make sure that you have node.js downloaded:
-```bash
-node --version
-```
-- make sure that npm is installed
-```bash
-npm --version
-```
-- go to the front end directory
+- TERMINAL 2 - Start the frontend:
 ```bash
 cd CES/frontend/cinema-ebooking
-```
-- install the frontend dependencies
-```bash
 npm install
-```
-- create frontend environment file (CES/frontend/cinema-ebooking/.env.local) and add this line:
-BACKEND_BASE_URL=http://localhost:5000
-
-- to run the frontend server
-``` bash
 npm run dev
 ```
 
-- ensure that the backend is running before starting the frontend up.
+- Then open browser at: http://localhost:3000
