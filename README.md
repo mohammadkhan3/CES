@@ -47,15 +47,19 @@ __pycache__/
 
 6)
 Testing:
-# TERMINAL 1 - Start the backend, but seed database first:
-#    cd backend
-#    source .venv/bin/activate
-#    python seed.py
-#    python run.py
+- TERMINAL 1 - Start the backend, but seed database first:
+```bash
+cd backend
+source .venv/bin/activate
+python seed.py
+python run.py
+```
 
-# TERMINAL 2 - Start the frontend:
-#    cd CES/frontend/cinema-ebooking
-#    npm install
-#    npm run dev
+- TERMINAL 2 - Start the frontend:
+```bash
+cd CES/frontend/cinema-ebooking
+npm install
+npm run dev
+```
 
-# Then open browser at: http://localhost:3000
+- Then open browser at: http://localhost:3000
