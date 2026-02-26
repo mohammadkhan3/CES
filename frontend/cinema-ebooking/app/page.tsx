@@ -70,6 +70,7 @@ function MovieCard({
       </h3>
 
       {/* showtimes */}
+      {!comingSoon && (
       <div className="mt-3 flex justify-center gap-2 flex-wrap">
         {["2:00 PM", "5:00 PM", "8:00 PM"].map((time) => (
           <span
@@ -80,6 +81,7 @@ function MovieCard({
           </span>
         ))}
       </div>
+      )}
     </div>
   );
 }

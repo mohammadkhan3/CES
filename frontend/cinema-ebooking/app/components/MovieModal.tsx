@@ -100,6 +100,7 @@ export default function MovieModal({
           </div>
 
           {/* showtimes & booking buttons */}
+          {movie.status !== "coming_soon" && (
           <div className="mt-auto">
             <h3 className="text-sm font-bold uppercase tracking-widest mb-3 text-zinc-400">
               Select Showtime to Book
@@ -108,7 +109,7 @@ export default function MovieModal({
               {showtimes.map((time) => (
                 <Link
                   key={time}
-                  href={`/booking?movieId=${movie.id}&time=${time}`}
+                  href={`/booking?title=${encodeURIComponent(movie.title)}&showtime=${encodeURIComponent(time)}`}
                   className="bg-zinc-800 hover:bg-red-600 border border-zinc-700 hover:border-red-600 transition px-5 py-2 rounded text-sm font-bold tracking-widest"
                 >
                   {time}
@@ -116,6 +117,7 @@ export default function MovieModal({
               ))}
             </div>
           </div>
+          )}
         </div>
       </div>
     </div>
