@@ -26,7 +26,15 @@ function SkeletonCard() {
   );
 }
 
-function MovieCard({ movie, comingSoon, onClick }: { movie: Movie; comingSoon?: boolean; onClick: () => void }) {
+function MovieCard({
+  movie,
+  comingSoon,
+  onClick,
+}: {
+  movie: Movie;
+  comingSoon?: boolean;
+  onClick: () => void;
+}) {
   return (
     <div className="text-center group cursor-pointer" onClick={onClick}>
       <div className="relative overflow-hidden border border-transparent group-hover:border-zinc-700 transition duration-300">
@@ -61,7 +69,7 @@ function MovieCard({ movie, comingSoon, onClick }: { movie: Movie; comingSoon?: 
         {movie.title}
       </h3>
 
-      {/* Showtimes */}
+      {/* showtimes */}
       <div className="mt-3 flex justify-center gap-2 flex-wrap">
         {["2:00 PM", "5:00 PM", "8:00 PM"].map((time) => (
           <span
@@ -72,7 +80,6 @@ function MovieCard({ movie, comingSoon, onClick }: { movie: Movie; comingSoon?: 
           </span>
         ))}
       </div>
-
     </div>
   );
 }
@@ -81,6 +88,7 @@ export default function HomePage() {
   const sp = useSearchParams();
   const q = (sp.get("q") ?? "").trim();
   const genre = (sp.get("genre") ?? "").trim();
+
   const [running, setRunning] = useState<Movie[]>([]);
   const [comingSoon, setComingSoon] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,15 +114,15 @@ export default function HomePage() {
 
         const json = await res.json();
 
-        // If q or genre is set, Flask returns: { data: [...] }
         if (q || genre) {
           const list: Movie[] = Array.isArray(json?.data) ? json.data : [];
           setRunning(list);
-          setComingSoon([]); // minimal: show results in the first section only
+          setComingSoon([]);
         } else {
-          // Homepage returns: { data: { currently_running, coming_soon } }
           const data = json?.data ?? {};
-          const r: Movie[] = Array.isArray(data.currently_running) ? data.currently_running : [];
+          const r: Movie[] = Array.isArray(data.currently_running)
+            ? data.currently_running
+            : [];
           const c: Movie[] = Array.isArray(data.coming_soon) ? data.coming_soon : [];
           setRunning(r);
           setComingSoon(c);
@@ -130,8 +138,10 @@ export default function HomePage() {
     load();
   }, [q, genre]);
 
-  const showRunningPlaceholders = loading || running.length === 0;
-  const showComingPlaceholders = loading || comingSoon.length === 0;
+  const isFiltering = Boolean(q || genre);
+  const showRunningSkeletons = loading;
+  const showComingSkeletons = loading && !isFiltering;
+  const noMatches = !loading && isFiltering && running.length === 0;
 
   return (
     <div className="min-h-screen bg-black text-white px-6 py-12">
@@ -146,37 +156,55 @@ export default function HomePage() {
           </h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-12">
-            {showRunningPlaceholders
-              ? Array.from({ length: 3 }).map((_, i) => (
+            {showRunningSkeletons ? (
+              Array.from({ length: 3 }).map((_, i) => (
                 <SkeletonCard key={`running-skel-${i}`} />
               ))
-              : running.map((m) => <MovieCard key={m.id} movie={m} onClick={() => setSelectedMovie(m)} />)}
-          </div>
-        </section>
-
-        <section>
-          <h2 className="text-2xl font-semibold tracking-wide mb-6">
-            Coming Soon
-          </h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-12">
-            {showComingPlaceholders
-              ? Array.from({ length: 3 }).map((_, i) => (
-                <SkeletonCard key={`coming-skel-${i}`} />
+            ) : noMatches ? (
+              <div className="col-span-full text-center text-zinc-400 uppercase tracking-widest text-sm py-10">
+                No matches found.
+              </div>
+            ) : (
+              running.map((m) => (
+                <MovieCard
+                  key={m.id}
+                  movie={m}
+                  onClick={() => setSelectedMovie(m)}
+                />
               ))
-              : comingSoon.map((m) => (
-                <MovieCard key={m.id} movie={m} comingSoon onClick={() => setSelectedMovie(m)} />
-              ))}
+            )}
           </div>
         </section>
+
+        {!isFiltering && (
+          <section>
+            <h2 className="text-2xl font-semibold tracking-wide mb-6">
+              Coming Soon
+            </h2>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-12">
+              {showComingSkeletons ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <SkeletonCard key={`coming-skel-${i}`} />
+                ))
+              ) : (
+                comingSoon.map((m) => (
+                  <MovieCard
+                    key={m.id}
+                    movie={m}
+                    comingSoon
+                    onClick={() => setSelectedMovie(m)}
+                  />
+                ))
+              )}
+            </div>
+          </section>
+        )}
       </div>
 
       {/* render modal if a movie is selected */}
       {selectedMovie && (
-        <MovieModal
-          movie={selectedMovie}
-          onClose={() => setSelectedMovie(null)}
-        />
+        <MovieModal movie={selectedMovie} onClose={() => setSelectedMovie(null)} />
       )}
     </div>
   );
