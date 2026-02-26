@@ -114,11 +114,13 @@ export default function HomePage() {
 
         const json = await res.json();
 
+        // if q or genre is set, Flask returns: { data: [...] }
         if (q || genre) {
           const list: Movie[] = Array.isArray(json?.data) ? json.data : [];
           setRunning(list);
-          setComingSoon([]);
+          setComingSoon([]); // show results in the first section only
         } else {
+          // homepage returns: { data: { currently_running, coming_soon } }
           const data = json?.data ?? {};
           const r: Movie[] = Array.isArray(data.currently_running)
             ? data.currently_running
@@ -176,6 +178,7 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* hide coming soon during search/filter to avoid empty skeletons */}
         {!isFiltering && (
           <section>
             <h2 className="text-2xl font-semibold tracking-wide mb-6">

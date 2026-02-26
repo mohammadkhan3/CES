@@ -40,9 +40,9 @@ export default function MovieModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-      {/* The Modal Box */}
+      {/* the modal box */}
       <div className="relative bg-zinc-950 border border-zinc-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto flex flex-col md:flex-row shadow-2xl">
-        {/* Close Button */}
+        {/* close button */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-zinc-500 hover:text-white font-bold text-2xl z-10 transition"
@@ -50,7 +50,7 @@ export default function MovieModal({
           &times;
         </button>
 
-        {/* Poster */}
+        {/* poster */}
         <div className="w-full md:w-1/3 bg-zinc-900 border-r border-zinc-800">
           {movie.poster_url ? (
             <img
@@ -65,13 +65,13 @@ export default function MovieModal({
           )}
         </div>
 
-        {/* Movie Details & Video */}
+        {/* movie details & video */}
         <div className="p-8 md:w-2/3 flex flex-col text-white">
           <h2 className="text-3xl font-diplomata uppercase tracking-wider mb-2">
             {movie.title}
           </h2>
 
-          {/* Rating and Genre */}
+          {/* rating and genre */}
           <div className="flex gap-3 text-xs text-red-500 mb-6 uppercase tracking-widest font-bold">
             <span>{movie.rating || "PG-13"}</span>
             <span>|</span>
@@ -82,7 +82,7 @@ export default function MovieModal({
             {movie.description || "No description available in the database yet."}
           </p>
 
-          {/* Embedded Trailer */}
+          {/* embedded trailer */}
           <div className="w-full aspect-video bg-black mb-8 border border-zinc-800 rounded overflow-hidden">
             {movie.trailer_url ? (
               <iframe
@@ -99,7 +99,7 @@ export default function MovieModal({
             )}
           </div>
 
-          {/* Showtimes & Booking Buttons */}
+          {/* showtimes & booking buttons */}
           <div className="mt-auto">
             <h3 className="text-sm font-bold uppercase tracking-widest mb-3 text-zinc-400">
               Select Showtime to Book
