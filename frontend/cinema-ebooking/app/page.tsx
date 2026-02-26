@@ -154,7 +154,7 @@ export default function HomePage() {
       <div className="max-w-6xl mx-auto space-y-16">
         <section>
           <h2 className="text-2xl font-semibold tracking-wide mb-6">
-            Currently Running
+            {isFiltering ? "Search Results" : "Currently Running"}
           </h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-12">
@@ -171,6 +171,7 @@ export default function HomePage() {
                 <MovieCard
                   key={m.id}
                   movie={m}
+                  comingSoon={m.status === "coming_soon"}
                   onClick={() => setSelectedMovie(m)}
                 />
               ))
