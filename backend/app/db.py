@@ -13,8 +13,48 @@ def get_client():
         _client = MongoClient(uri, tls=True, tlsCAFile=certifi.where(), serverSelectionTimeoutMS=30000)
     return _client
 
-def get_movies_collection():
+def get_db():
     db_name = os.getenv("MONGO_DB", "ces_db")
-    client = get_client()
-    db = client[db_name]
-    return db["movies"]
+    return get_client()[db_name]
+
+def get_movies_collection():
+    return get_db()["movies"]
+
+def get_users_collection():
+    return get_db()["users"]
+
+def get_bookings_collection():
+    return get_db()["bookings"]
+
+def get_tickets_collection():
+    return get_db()["tickets"]
+
+def get_shows_collection():
+    return get_db()["shows"]
+
+def get_showrooms_collection():
+    return get_db()["showrooms"]
+
+def get_theatres_collection():
+    return get_db()["theatres"]
+
+def get_seats_collection():
+    return get_db()["seats"]
+
+def get_promotions_collection():
+    return get_db()["promotions"]
+
+def get_ticket_prices_collection():
+    return get_db()["ticket_prices"]
+
+def get_addresses_collection():
+    return get_db()["addresses"]
+
+def get_customer_preferences_collection():
+    return get_db()["customer_preferences"]
+
+def get_recommendations_collection():
+    return get_db()["recommendations"]
+
+def get_booking_history_collection():
+    return get_db()["booking_history"]
