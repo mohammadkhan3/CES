@@ -114,12 +114,17 @@ export default function Navbar() {
 
         {/* User Login/Signup Actions */}
         <div className="flex items-center gap-6 ml-4">
+          <Link href="/profile" className="text-xs uppercase tracking-widest hover:text-red-600 transition">
+            Profile
+          </Link>
+          
           <Link href="/login" className="text-xs uppercase tracking-widest hover:text-red-600 transition">
             Login
           </Link>
-          <button className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded text-xs font-bold uppercase transition">
+
+          <Link href="/register" className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded text-xs font-bold uppercase transition">
             Sign Up
-          </button>
+          </Link>
         </div>
       </div>
     </nav>
