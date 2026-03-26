@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Handle standard login
+  // Handles a standard login
   const handleLogin = (e: React.SyntheticEvent) => {
     e.preventDefault();
     setError("");
