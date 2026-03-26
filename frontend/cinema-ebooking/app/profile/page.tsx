@@ -54,7 +54,7 @@ export default function EditProfilePage() {
       return;
     }
 
-    // Send data to Flask backend HERE
+    // Send data to be here
     setMessage("Profile updated successfully! (Email notification would be sent here)");
     setCurrentPassword("");
     setNewPassword("");

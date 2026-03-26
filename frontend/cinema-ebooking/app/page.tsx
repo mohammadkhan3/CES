@@ -152,7 +152,7 @@ export default function HomePage() {
 
         const json = await res.json();
 
-        // if q or genre is set, Flask returns: { data: [...] }
+        // if q or genre is set
         if (q || genre) {
           const list: Movie[] = Array.isArray(json?.data) ? json.data : [];
           setRunning(list);
