@@ -3,7 +3,11 @@ import certifi
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
+from app.security import hash_password
+
 load_dotenv()
+
+SEED_USER_PASSWORD = os.getenv("SEED_USER_PASSWORD", "ChangeMe123!")
 
 uri = os.getenv("MONGO_URI")
 db_name = os.getenv("MONGO_DB", "ces_db")
@@ -198,20 +202,23 @@ address_ids = addresses.inserted_ids
 print(f"Seeded {len(address_ids)} addresses")
 
 # Seed users
+admin_password_hash = hash_password(os.getenv("ADMIN_SEED_PASSWORD", SEED_USER_PASSWORD))
+customer_password_hash = hash_password(os.getenv("CUSTOMER_SEED_PASSWORD", SEED_USER_PASSWORD))
+
 users = db["users"].insert_many([
     {
         "role": "admin",
         "firstName": "Admin",
         "lastName": "User",
         "email": "admin@ces.com",
-        "password": "hashed_password_here",
+        "password": admin_password_hash,
     },
     {
         "role": "customer",
         "firstName": "John",
         "lastName": "Doe",
         "email": "john@example.com",
-        "password": "hashed_password_here",
+        "password": customer_password_hash,
         "status": "ACTIVE",
         "mailingAddress": address_ids[0],
         "paymentCards": [],
@@ -222,7 +229,7 @@ users = db["users"].insert_many([
         "firstName": "Jane",
         "lastName": "Smith",
         "email": "jane@example.com",
-        "password": "hashed_password_here",
+        "password": customer_password_hash,
         "status": "ACTIVE",
         "mailingAddress": address_ids[1],
         "paymentCards": [],
