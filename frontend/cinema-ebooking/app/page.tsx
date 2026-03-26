@@ -35,9 +35,61 @@ function MovieCard({
   comingSoon?: boolean;
   onClick: () => void;
 }) {
+  const [isFavorite, setIsFavorite] = useState(false);
+
+  const handleFavoriteClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      alert("Please log in or sign up to add movies to your favorites!");
+      return;
+    }
+
+    const newState = !isFavorite;
+    setIsFavorite(newState); 
+
+    try {
+      // Connect this part to backend
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/favorites`, {
+        method: newState ? "POST" : "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ movie_id: movie.id }),
+      });
+    } catch {
+      setIsFavorite(!newState);
+    }
+  };
+
   return (
     <div className="text-center group cursor-pointer" onClick={onClick}>
       <div className="relative overflow-hidden border border-transparent group-hover:border-zinc-700 transition duration-300">
+
+        <button
+          onClick={handleFavoriteClick}
+          className="absolute top-3 left-3 z-20 p-2 rounded-full bg-black/60 hover:bg-black/90 transition backdrop-blur-sm"
+          title={isFavorite ? "Remove from Favorites" : "Add to Favorites"}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill={isFavorite ? "#dc2626" : "none"}
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke={isFavorite ? "#dc2626" : "currentColor"}
+            className="w-6 h-6 text-white transition-colors duration-300"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
+            />
+          </svg>
+        </button>
+
         {comingSoon && (
           <div className="absolute top-3 right-3 z-10 bg-red-600 text-white text-xs font-bold px-3 py-1 rotate-12 shadow-lg">
             COMING SOON!
@@ -56,7 +108,6 @@ function MovieCard({
               Poster
             </div>
           )}
-
           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition duration-300 flex items-center justify-center">
             <span className="border border-white px-4 py-2 text-xs uppercase tracking-widest">
               View Details
@@ -69,18 +120,17 @@ function MovieCard({
         {movie.title}
       </h3>
 
-      {/* showtimes */}
       {!comingSoon && (
-      <div className="mt-3 flex justify-center gap-2 flex-wrap">
-        {["2:00 PM", "5:00 PM", "8:00 PM"].map((time) => (
-          <span
-            key={time}
-            className="text-xs px-3 py-1 border border-zinc-600 rounded text-zinc-300"
-          >
-            {time}
-          </span>
-        ))}
-      </div>
+        <div className="mt-3 flex justify-center gap-2 flex-wrap">
+          {["2:00 PM", "5:00 PM", "8:00 PM"].map((time) => (
+            <span
+              key={time}
+              className="text-xs px-3 py-1 border border-zinc-600 rounded text-zinc-300"
+            >
+              {time}
+            </span>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -95,14 +145,12 @@ export default function HomePage() {
   const [comingSoon, setComingSoon] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // track which movie is clicked for the modal
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
 
   useEffect(() => {
     async function load() {
       setLoading(true);
       try {
-        // single proxy route: homepage handles optional q/genre
         const params = new URLSearchParams();
         if (q) params.set("q", q);
         if (genre) params.set("genre", genre);
@@ -116,13 +164,11 @@ export default function HomePage() {
 
         const json = await res.json();
 
-        // if q or genre is set, Flask returns: { data: [...] }
         if (q || genre) {
           const list: Movie[] = Array.isArray(json?.data) ? json.data : [];
           setRunning(list);
-          setComingSoon([]); // show results in the first section only
+          setComingSoon([]);
         } else {
-          // homepage returns: { data: { currently_running, coming_soon } }
           const data = json?.data ?? {};
           const r: Movie[] = Array.isArray(data.currently_running)
             ? data.currently_running
@@ -181,7 +227,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* hide coming soon during search/filter to avoid empty skeletons */}
         {!isFiltering && (
           <section>
             <h2 className="text-2xl font-semibold tracking-wide mb-6">
@@ -208,7 +253,6 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* render modal if a movie is selected */}
       {selectedMovie && (
         <MovieModal movie={selectedMovie} onClose={() => setSelectedMovie(null)} />
       )}
