@@ -44,3 +44,35 @@ def send_confirmation_email(recipient_email: str, token: str) -> None:
 
     client = SendGridAPIClient(api_key)
     client.send(message)
+
+def send_profile_update_email(recipient_email: str) -> None:
+    api_key = os.getenv("SENDGRID_API_KEY")
+    sender = os.getenv("EMAIL_SENDER", "no-reply@ces.local")
+
+    if not api_key:
+        raise RuntimeError("SENDGRID_API_KEY is not configured")
+
+    subject = "Your CES Profile Was Updated"
+    text_body = (
+        "Hello,\n\n"
+        "Your CES Cinema profile information was recently updated.\n"
+        "If you made this change, no further action is required.\n\n"
+        "If you did NOT make this change, please contact support immediately."
+    )
+    html_body = (
+        "<p>Hello,</p>"
+        "<p>Your CES Cinema profile information was recently updated.</p>"
+        "<p>If you made this change, no further action is required.</p>"
+        "<p><strong>If you did NOT make this change, please contact support immediately.</strong></p>"
+    )
+
+    message = Mail(
+        from_email=sender,
+        to_emails=recipient_email,
+        subject=subject,
+        plain_text_content=text_body,
+        html_content=html_body,
+    )
+
+    client = SendGridAPIClient(api_key)
+    client.send(message)
