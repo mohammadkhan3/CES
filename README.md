@@ -66,3 +66,10 @@ npm run dev
 ```
 
 - Then open browser at: http://localhost:3000
+
+
+- To test different User Roles (seeded pre-set roles)
+```
+Admin: `admin@ces.com` / `ChangeMe123!`
+Customer: `john@example.com` / `ChangeMe123!`
+```

@@ -37,27 +37,22 @@ export default function Navbar() {
   const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const role = localStorage.getItem("role");
-    setIsLoggedIn(!!token);
-    setIsAdmin(role === "admin");
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    setIsLoggedIn(!!user?.userId);
+    setIsAdmin(user?.role === "admin");
   }, []);
 
   const handleLogout = () => setShowConfirm(true);
 
   const confirmLogout = async () => {
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/logout`, {
+      await fetch("/api/auth/logout", {
         method: "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
     } catch {}
-
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
-    document.cookie = "token=; Max-Age=0; path=/";
-    document.cookie = "session=; Max-Age=0; path=/";
-
+  
+    localStorage.removeItem("user");
+  
     setIsLoggedIn(false);
     setIsAdmin(false);
     setShowConfirm(false);

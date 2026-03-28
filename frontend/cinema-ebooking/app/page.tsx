@@ -30,35 +30,35 @@ function MovieCard({
   movie,
   comingSoon,
   onClick,
+  favoriteIds = [],
 }: {
   movie: Movie;
   comingSoon?: boolean;
   onClick: () => void;
+  favoriteIds?: string[];
 }) {
-  const [isFavorite, setIsFavorite] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(favoriteIds.includes(movie.id));
 
   const handleFavoriteClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
-
-    const token = localStorage.getItem("token");
-
-    if (!token) {
+  
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+  
+    if (!user?.userId) {
       alert("Please log in or sign up to add movies to your favorites!");
       return;
     }
-
+  
     const newState = !isFavorite;
-    setIsFavorite(newState); 
-
+    setIsFavorite(newState);
+  
     try {
-      // Connect this part to backend
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/favorites`, {
+      await fetch(`/api/profile/favorites/${movie.id}`, {
         method: newState ? "POST" : "DELETE",
-        headers: {
+        headers: { 
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          "X-User-Email": user.email,
         },
-        body: JSON.stringify({ movie_id: movie.id }),
       });
     } catch {
       setIsFavorite(!newState);
