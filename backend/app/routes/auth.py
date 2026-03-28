@@ -1,11 +1,11 @@
 import os
 import re
 from datetime import datetime, timedelta
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, jsonify, request, session
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from app.db import get_users_collection
-from app.security import hash_password
+from app.security import hash_password, verify_password
 from app.services.email import build_confirmation_link, send_confirmation_email
 
 auth_bp = Blueprint("auth", __name__)
@@ -145,3 +145,68 @@ def confirm_user(token):
     )
 
     return jsonify({"message": "Account confirmed successfully."}), 200
+
+@auth_bp.post("/auth/login")
+def login_user():
+    payload = request.get_json(silent=True) or {}
+    email_raw = (payload.get("email") or "").strip()
+    password = payload.get("password") or ""
+
+    if not email_raw or not password:
+        return jsonify({"message": "Email and password are required."}), 400
+
+    users = get_users_collection()
+    user = users.find_one({"emailLower": email_raw.lower()})
+
+    if not user or not verify_password(password, user["password"]):
+        return jsonify({"message": "Invalid email or password."}), 401
+
+    if user.get("status") != "ACTIVE":
+        return jsonify({"message": "Please confirm your email before logging in."}), 403
+
+    session["userId"] = str(user["_id"])
+    session["role"] = user.get("role", "customer")
+
+    return jsonify({
+        "message": "Login successful.",
+        "data": {
+            "userId": str(user["_id"]),
+            "firstName": user["firstName"],
+            "lastName": user["lastName"],
+            "email": user["email"],
+            "role": user.get("role", "customer"),
+        }
+    }), 200
+
+
+@auth_bp.post("/auth/logout")
+def logout_user():
+    session.clear()
+    return jsonify({"message": "Logged out successfully."}), 200
+
+
+@auth_bp.post("/auth/forgot-password")
+def forgot_password():
+    payload = request.get_json(silent=True) or {}
+    email_raw = (payload.get("email") or "").strip()
+
+    if not email_raw:
+        return jsonify({"message": "Email is required."}), 400
+
+    users = get_users_collection()
+    user = users.find_one({"emailLower": email_raw.lower()})
+
+    if not user:
+        return jsonify({"message": "If an account exists, a reset link has been sent."}), 200
+
+    serializer = _get_serializer()
+    token = serializer.dumps(email_raw.lower(), salt="password-reset")
+    reset_link = f"{os.getenv('APP_BASE_URL', 'http://localhost:3000')}/reset-password?token={token}"
+    current_app.logger.info("Password reset link for %s: %s", email_raw, reset_link)
+
+    try:
+        send_confirmation_email(email_raw, token)
+    except Exception as exc:
+        current_app.logger.warning("Failed to send reset email: %s", exc)
+
+    return jsonify({"message": "If an account exists, a reset link has been sent."}), 200

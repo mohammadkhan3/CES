@@ -13,35 +13,65 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Handles a standard login
-  const handleLogin = (e: React.SyntheticEvent) => {
+  // Updated standard login
+  const handleLogin = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setError("");
-    
-    
+  
     if (!email || !password) {
       setError("Please fill in both email and password.");
       return;
     }
-
-    // Connect to backend auth HERE
-    console.log("Attempting to login with:", email, password);
-    alert("Backend connection pending! This will eventually redirect to the homepage or admin page.");
+  
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+  
+      const data = await res.json();
+  
+      if (!res.ok) {
+        setError(data.message || "Login failed. Please try again.");
+        return;
+      }
+  
+      localStorage.setItem("user", JSON.stringify(data.data));
+  
+      if (data.data.role === "admin") {
+        window.location.href = "/admin";
+      } else {
+        window.location.href = "/";
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
+    }
   };
 
-  // Handle forgot password request
-  const handleForgotPassword = (e: React.SyntheticEvent) => {
+  // Updated forgot password request
+  const handleForgotPassword = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setError("");
     setSuccess("");
-
+  
     if (!email) {
-      setError("Please enter your email address to reset your password.");
+      setError("Please enter your email address.");
       return;
     }
-
-    // Connect to backend forgot password route HERE
-    setSuccess("If an account exists with that email, a reset link has been sent!");
+  
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+  
+      const data = await res.json();
+      setSuccess(data.message || "If an account exists, a reset link has been sent!");
+    } catch {
+      setError("Something went wrong. Please try again.");
+    }
   };
 
   return (
