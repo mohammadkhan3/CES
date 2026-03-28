@@ -84,12 +84,12 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       // this is where we need to connect to the backend
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, {
+      const res = await fetch(`/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          first_name: form.firstName,
-          last_name: form.lastName,
+          firstName: form.firstName,
+          lastName: form.lastName,
           email: form.email,
           phone: form.phone,
           password: form.password,

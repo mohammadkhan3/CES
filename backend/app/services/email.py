@@ -1,4 +1,7 @@
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 import os
+import certifi
 
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
