@@ -37,6 +37,10 @@ pip install certifi pymongo python-dotenv
 PORT=5000
 MONGO_URI=[REPLACE_ME]
 MONGO_DB=ces_db
+SECRET_KEY=ces_secret_key_2026
+SENDGRID_API_KEY=[REPLACE_ME]
+EMAIL_SENDER=[REPLACE_ME]
+APP_BASE_URL=http://localhost:3000
 
 - create .gitignore file with these contents:
 .venv/
