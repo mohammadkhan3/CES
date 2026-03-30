@@ -4,10 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 
 export default function LoginPage() {
-  
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  
+
 
   const [view, setView] = useState<"login" | "forgot">("login");
   const [error, setError] = useState("");
@@ -17,28 +17,28 @@ export default function LoginPage() {
   const handleLogin = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setError("");
-  
+
     if (!email || !password) {
       setError("Please fill in both email and password.");
       return;
     }
-  
+
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-  
+
       const data = await res.json();
-  
+
       if (!res.ok) {
         setError(data.message || "Login failed. Please try again.");
         return;
       }
-  
+
       localStorage.setItem("user", JSON.stringify(data.data));
-  
+
       if (data.data.role === "admin") {
         window.location.href = "/admin";
       } else {
@@ -54,21 +54,26 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setSuccess("");
-  
+
     if (!email) {
       setError("Please enter your email address.");
       return;
     }
-  
+
     try {
       const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-  
+
       const data = await res.json();
       setSuccess(data.message || "If an account exists, a reset link has been sent!");
+      
+      setTimeout(() => {
+        setView("login");
+        setSuccess("");
+      }, 1500);
     } catch {
       setError("Something went wrong. Please try again.");
     }
@@ -77,7 +82,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center px-4 py-12">
       <div className="max-w-md w-full bg-zinc-950 p-8 rounded-lg border border-zinc-800 shadow-2xl">
-        
+
         <h2 className="text-3xl font-diplomata uppercase tracking-wider text-center mb-6">
           {view === "login" ? "Welcome Back" : "Reset Password"}
         </h2>
@@ -135,14 +140,14 @@ export default function LoginPage() {
         {/* Form Footer Links */}
         <div className="mt-6 flex flex-col items-center gap-3 text-sm text-zinc-400">
           {view === "login" ? (
-            <button 
+            <button
               onClick={() => { setView("forgot"); setError(""); setSuccess(""); }}
               className="hover:text-white transition tracking-wide"
             >
               Forgot your password?
             </button>
           ) : (
-            <button 
+            <button
               onClick={() => { setView("login"); setError(""); setSuccess(""); }}
               className="hover:text-white transition tracking-wide"
             >

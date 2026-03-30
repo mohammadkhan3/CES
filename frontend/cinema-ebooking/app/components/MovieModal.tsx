@@ -31,9 +31,11 @@ function toEmbedUrl(url?: string) {
 export default function MovieModal({
   movie,
   onClose,
+  userEmail,
 }: {
   movie: Movie;
   onClose: () => void;
+  userEmail: string;
 }) {
   const [favoriteMessage, setFavoriteMessage] = useState("");
 
@@ -42,9 +44,18 @@ export default function MovieModal({
   const showtimes = ["2:00 PM", "5:00 PM", "8:00 PM"];
 
   const handleAddFavorite = async () => {
+    if(!userEmail) {
+      setFavoriteMessage("Could not identify logged in user.");
+      return;
+    }
+
     try {
       const res = await fetch(`/api/profile/favorites/${movie.id}`, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Email": userEmail,
+        },
       });
 
       const data = await res.json();
