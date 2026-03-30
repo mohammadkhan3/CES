@@ -4,10 +4,19 @@ import { useState, useEffect } from "react";
 
 const PASSWORD_RULES = [
   { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
-  { label: "One uppercase letter",  test: (p: string) => /[A-Z]/.test(p) },
-  { label: "One number",            test: (p: string) => /\d/.test(p) },
+  { label: "One uppercase letter", test: (p: string) => /[A-Z]/.test(p) },
+  { label: "One number", test: (p: string) => /\d/.test(p) },
   { label: "One special character", test: (p: string) => /[^A-Za-z0-9]/.test(p) },
 ];
+
+async function safeJson(res: Response) {
+  const text = await res.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    return { message: text || "No response body" };
+  }
+}
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState({
@@ -20,14 +29,32 @@ export default function ProfilePage() {
   });
 
   const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword]         = useState("");
-  const [loading, setLoading]                 = useState(true);
-  const [message, setMessage]                 = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    setUserEmail(user.email || "");
+  }, []);
 
   const loadProfile = async () => {
+    if (!userEmail) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      const res = await fetch("/api/profile", { cache: "no-store" });
+      const res = await fetch("/api/profile", {
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Email": userEmail,
+        },
+      });
+
       if (res.ok) {
         const data = await res.json();
         setProfile({
@@ -60,7 +87,11 @@ export default function ProfilePage() {
     }
   };
 
-  useEffect(() => { loadProfile(); }, []);
+  useEffect(() => {
+    if (userEmail) {
+      loadProfile();
+    }
+  }, [userEmail]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,17 +115,20 @@ export default function ProfilePage() {
     try {
       const res = await fetch("/api/profile", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Email": userEmail,
+        },
         body: JSON.stringify({
           firstName: profile.firstName,
-          lastName:  profile.lastName,
+          lastName: profile.lastName,
+          email: profile.email,
           mailingAddress: profile.address,
           cards: profile.cards.map((card, index) => ({
             id:   card.id || String(index + 1),
             last4: card.last4,
-            exp:  card.exp
+            exp: card.exp
           })),
-          // TODO: wire password change to backend when endpoint is ready
           ...(newPassword ? { currentPassword, newPassword } : {}),
         }),
       });
@@ -161,7 +195,9 @@ export default function ProfilePage() {
               Personal Info
             </h2>
 
-            <label className="block text-[10px] text-zinc-500 uppercase mb-1">Email Address (Read-Only)</label>
+            <label className="block text-[10px] text-zinc-500 uppercase mb-1">
+              Email Address (Read-Only)
+            </label>
             <input
               type="email"
               value={profile.email}
@@ -202,7 +238,12 @@ export default function ProfilePage() {
                 <input
                   type="text"
                   value={profile.address?.street || ""}
-                  onChange={(e) => setProfile({ ...profile, address: { ...profile.address, street: e.target.value } })}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      address: { ...profile.address, street: e.target.value }
+                    })
+                  }
                   className="w-full bg-zinc-900 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
                 />
               </div>
@@ -212,7 +253,12 @@ export default function ProfilePage() {
                   <input
                     type="text"
                     value={profile.address?.city || ""}
-                    onChange={(e) => setProfile({ ...profile, address: { ...profile.address, city: e.target.value } })}
+                    onChange={(e) =>
+                      setProfile({
+                        ...profile,
+                        address: { ...profile.address, city: e.target.value }
+                      })
+                    }
                     className="w-full bg-zinc-900 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
                   />
                 </div>
@@ -222,7 +268,12 @@ export default function ProfilePage() {
                     <input
                       type="text"
                       value={profile.address?.state || ""}
-                      onChange={(e) => setProfile({ ...profile, address: { ...profile.address, state: e.target.value } })}
+                      onChange={(e) =>
+                        setProfile({
+                          ...profile,
+                          address: { ...profile.address, state: e.target.value }
+                        })
+                      }
                       className="w-full bg-zinc-900 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
                     />
                   </div>
@@ -231,7 +282,12 @@ export default function ProfilePage() {
                     <input
                       type="text"
                       value={profile.address?.zipCode || ""}
-                      onChange={(e) => setProfile({ ...profile, address: { ...profile.address, zipCode: e.target.value } })}
+                      onChange={(e) =>
+                        setProfile({
+                          ...profile,
+                          address: { ...profile.address, zipCode: e.target.value }
+                        })
+                      }
                       className="w-full bg-zinc-900 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
                     />
                   </div>
@@ -243,6 +299,11 @@ export default function ProfilePage() {
             </p>
           </div>
 
+            <p className="text-[10px] text-zinc-600 mt-4 uppercase tracking-tighter">
+              * Restricted to one primary address.
+            </p>
+          </div>
+        
           {/* Change Password */}
           <div className="bg-zinc-950 p-6 rounded border border-zinc-800 md:col-span-2">
             <h2 className="text-red-600 font-bold mb-4 uppercase tracking-widest text-sm border-b border-zinc-800 pb-2">
@@ -380,7 +441,13 @@ export default function ProfilePage() {
                     type="button"
                     onClick={async () => {
                       try {
-                        const res = await fetch(`/api/profile/favorites/${fav.id}`, { method: "DELETE" });
+                        const res = await fetch(`/api/profile/favorites/${fav.id}`, {
+                          method: "DELETE",
+                          headers: {
+                            "Content-Type": "application/json",
+                            "X-User-Email": userEmail,
+                          },
+                        });
                         const data = await res.json();
                         if (res.ok) {
                           setMessage(data.message || "Favorite removed.");

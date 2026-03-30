@@ -1,24 +1,45 @@
 import { NextResponse } from "next/server";
 
 const BACKEND_BASE = process.env.BACKEND_BASE_URL ?? "http://localhost:5000";
-const USER_EMAIL = process.env.TEST_USER_EMAIL ?? "john@example.com";
+
+async function normalizeUpstreamResponse(upstream: Response) {
+  const text = await upstream.text();
+  const contentType = upstream.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    return new NextResponse(text, {
+      status: upstream.status,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  try {
+    JSON.parse(text);
+    return new NextResponse(text, {
+      status: upstream.status,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch {
+    return NextResponse.json(
+      { message: text || "No response body" },
+      { status: upstream.status }
+    );
+  }
+}
 
 export async function GET(req: Request) {
   const headers = Object.fromEntries(req.headers);
+
   const upstream = await fetch(`${BACKEND_BASE}/api/profile`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
-      "X-User-Email": headers["x-user-email"] || USER_EMAIL,
+      "X-User-Email": headers["x-user-email"] || "",
     },
     cache: "no-store",
   });
 
-  const text = await upstream.text();
-  return new NextResponse(text, {
-    status: upstream.status,
-    headers: { "Content-Type": "application/json" },
-  });
+  return normalizeUpstreamResponse(upstream);
 }
 
 export async function PUT(req: Request) {
@@ -29,14 +50,10 @@ export async function PUT(req: Request) {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
-      "X-User-Email": headers["x-user-email"] || USER_EMAIL,
+      "X-User-Email": headers["x-user-email"] || "",
     },
     body,
   });
 
-  const text = await upstream.text();
-  return new NextResponse(text, {
-    status: upstream.status,
-    headers: { "Content-Type": "application/json" },
-  });
+  return normalizeUpstreamResponse(upstream);
 }

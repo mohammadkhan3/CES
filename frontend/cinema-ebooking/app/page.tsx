@@ -31,35 +31,48 @@ function MovieCard({
   comingSoon,
   onClick,
   favoriteIds = [],
+  onFavoriteChange,
 }: {
   movie: Movie;
   comingSoon?: boolean;
   onClick: () => void;
   favoriteIds?: string[];
+  onFavoriteChange?: () => Promise<void> | void;
 }) {
   const [isFavorite, setIsFavorite] = useState(favoriteIds.includes(movie.id));
 
+  useEffect(() => {
+    setIsFavorite(favoriteIds.includes(movie.id));
+  }, [favoriteIds, movie.id]);
+
   const handleFavoriteClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
-  
+
     const user = JSON.parse(localStorage.getItem("user") || "{}");
-  
+
     if (!user?.userId) {
       alert("Please log in or sign up to add movies to your favorites!");
       return;
     }
-  
+
     const newState = !isFavorite;
     setIsFavorite(newState);
-  
+
     try {
-      await fetch(`/api/profile/favorites/${movie.id}`, {
+      const res = await fetch(`/api/profile/favorites/${movie.id}`, {
         method: newState ? "POST" : "DELETE",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "X-User-Email": user.email,
         },
       });
+      if (!res.ok) {
+        throw new Error("Favorite request failed");
+      }
+
+      if (onFavoriteChange) {
+        await onFavoriteChange();
+      }
     } catch {
       setIsFavorite(!newState);
     }
@@ -147,6 +160,51 @@ export default function HomePage() {
 
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
 
+  const [userEmail, setUserEmail] = useState("");
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    setUserEmail(user.email || "");
+  }, []);
+
+  const loadFavorites = async () => {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+    if (!user?.email) {
+      setFavoriteIds([]);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/profile", {
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Email": user.email,
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to load favorites");
+      }
+
+      const data = await res.json();
+      const ids = Array.isArray(data?.favorites)
+        ? data.favorites.map((fav: { id?: string }) => fav.id).filter(Boolean)
+        : [];
+
+      setFavoriteIds(ids);
+    } catch (error) {
+      console.error("Error loading favorites:", error);
+      setFavoriteIds([]);
+    }
+  };
+
+  useEffect(() => {
+    loadFavorites();
+  }, []);
+
   useEffect(() => {
     async function load() {
       setLoading(true);
@@ -221,6 +279,8 @@ export default function HomePage() {
                   movie={m}
                   comingSoon={m.status === "coming_soon"}
                   onClick={() => setSelectedMovie(m)}
+                  favoriteIds={favoriteIds}
+                  onFavoriteChange={loadFavorites}
                 />
               ))
             )}
@@ -245,6 +305,8 @@ export default function HomePage() {
                     movie={m}
                     comingSoon
                     onClick={() => setSelectedMovie(m)}
+                    favoriteIds={favoriteIds}
+                    onFavoriteChange={loadFavorites}
                   />
                 ))
               )}
@@ -254,7 +316,7 @@ export default function HomePage() {
       </div>
 
       {selectedMovie && (
-        <MovieModal movie={selectedMovie} onClose={() => setSelectedMovie(null)} />
+        <MovieModal movie={selectedMovie} onClose={() => setSelectedMovie(null)} userEmail={userEmail} />
       )}
     </div>
   );

@@ -1,7 +1,31 @@
 import { NextResponse } from "next/server";
 
 const BACKEND_BASE = process.env.BACKEND_BASE_URL ?? "http://localhost:5000";
-const USER_EMAIL = process.env.TEST_USER_EMAIL ?? "john@example.com";
+
+async function normalizeUpstreamResponse(upstream: Response) {
+  const text = await upstream.text();
+  const contentType = upstream.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    return new NextResponse(text, {
+      status: upstream.status,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  try {
+    JSON.parse(text);
+    return new NextResponse(text, {
+      status: upstream.status,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch {
+    return NextResponse.json(
+      { message: text || "No response body" },
+      { status: upstream.status }
+    );
+  }
+}
 
 export async function POST(
   req: Request,
@@ -14,15 +38,11 @@ export async function POST(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-User-Email": headers["x-user-email"] || USER_EMAIL,
+      "X-User-Email": headers["x-user-email"] || "",
     },
   });
 
-  const text = await upstream.text();
-  return new NextResponse(text, {
-    status: upstream.status,
-    headers: { "Content-Type": "application/json" },
-  });
+  return normalizeUpstreamResponse(upstream);
 }
 
 export async function DELETE(
@@ -36,13 +56,9 @@ export async function DELETE(
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",
-      "X-User-Email": headers["x-user-email"] || USER_EMAIL,
+      "X-User-Email": headers["x-user-email"] || "",
     },
   });
 
-  const text = await upstream.text();
-  return new NextResponse(text, {
-    status: upstream.status,
-    headers: { "Content-Type": "application/json" },
-  });
+  return normalizeUpstreamResponse(upstream);
 }
