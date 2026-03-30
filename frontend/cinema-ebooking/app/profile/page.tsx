@@ -1,180 +1,360 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-export default function EditProfilePage() {
+export default function ProfilePage() {
+  const [profile, setProfile] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    address: {
+      street: "",
+      city: "",
+      state: "",
+      zipCode: ""
+    },
+    cards: [] as { id: string; last4: string; exp: string }[],
+    favorites: [] as { id: string; title: string }[]
+  });
 
-  const [name, setName] = useState("John Doe");
-  const email = "user@ces.com"; 
-  const [phone, setPhone] = useState("555-0198");
-
-  // Address State 
-  const [address, setAddress] = useState("123 Cinema Way, Athens, GA 30602");
-
-  // Payment Cards State 
-  const [cards, setCards] = useState([
-    { id: 1, last4: "4242", exp: "12/25" }
-  ]);
-  const [newCardInput, setNewCardInput] = useState("");
-
-  // Password State 
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  
-  // Favorites State 
-  const [favorites] = useState([
-    { id: "1", title: "F1: THE MOVIE", poster_url: "https://via.placeholder.com/150" }
-  ]);
-
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
+  const loadProfile = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/profile", { cache: "no-store" });
+
+      if (res.ok) {
+        const data = await res.json();
+        setProfile({
+          firstName: data.firstName || "",
+          lastName: data.lastName || "",
+          email: data.email || "",
+          address: data.mailingAddress || {
+            street: "",
+            city: "",
+            state: "",
+            zipCode: ""
+          },
+          cards: Array.isArray(data.cards)
+            ? data.cards.map((card: { id?: string; last4?: string; exp?: string }) => ({
+              id: card.id || "",
+              last4: card.last4 || "",
+              exp: card.exp || ""
+            }))
+            : [],
+          favorites: Array.isArray(data.favorites)
+            ? data.favorites.map((fav: { id?: string; title?: string }) => ({
+              id: fav.id || "",
+              title: fav.title || ""
+            }))
+            : []
+        });
+      } else {
+        setMessage("Failed to load profile data.");
+      }
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+      setMessage("Could not connect to the database.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMessage("Saving to database...");
+
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mailingAddress: profile.address,
+          cards: profile.cards.map((card, index) => ({
+            id: card.id || String(index + 1),
+            last4: card.last4,
+            exp: card.exp
+          }))
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setMessage(data.message || "Profile successfully updated!");
+        await loadProfile();
+      } else {
+        setMessage(data.message || data.error || "Failed to update profile.");
+      }
+    } catch (error) {
+      console.error("Error saving profile:", error);
+      setMessage("Could not connect to the database.");
+    }
+  };
 
   const handleAddCard = () => {
-    if (cards.length >= 3) {
-      setMessage("You cannot store more than 3 payment cards.");
-      return;
-    }
-    if (newCardInput) {
-      setCards([...cards, { id: Date.now(), last4: newCardInput.slice(-4), exp: "12/26" }]);
-      setNewCardInput("");
-      setMessage("Card added successfully!");
+    if (profile.cards.length < 3) {
+      setProfile({
+        ...profile,
+        cards: [
+          ...profile.cards,
+          {
+            id: String(profile.cards.length + 1),
+            last4: "",
+            exp: ""
+          }
+        ]
+      });
     }
   };
 
-  const handleRemoveCard = (id: number) => {
-    setCards(cards.filter(card => card.id !== id));
+  const handleRemoveCard = (indexToRemove: number) => {
+    const updatedCards = profile.cards.filter((_, index) => index !== indexToRemove);
+    setProfile({ ...profile, cards: updatedCards });
   };
 
-  const handleSaveChanges = (e: React.SyntheticEvent) => {
-    e.preventDefault();
-    
-    // Check password logic
-    if (newPassword && !currentPassword) {
-      setMessage("Error: You must enter your current password to set a new password.");
-      return;
-    }
-
-    // Send data to be here
-    setMessage("Profile updated successfully! (Email notification would be sent here)");
-    setCurrentPassword("");
-    setNewPassword("");
-  };
+  if (loading) {
+    return <div className="min-h-screen bg-black text-white flex justify-center items-center">Loading Profile Data...</div>;
+  }
 
   return (
-    <div className="min-h-screen bg-black text-white py-12 px-6">
-      <div className="max-w-4xl mx-auto space-y-8">
-        <h1 className="text-4xl font-diplomata uppercase tracking-wider mb-8 border-b border-zinc-800 pb-4">
-          Manage Profile
-        </h1>
+    <div className="min-h-screen bg-black text-white p-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-4xl font-diplomata text-center mb-10 uppercase tracking-tighter">Manage Profile</h1>
 
         {message && (
-          <div className={`p-4 rounded border text-sm font-bold tracking-widest uppercase ${message.includes("Error") ? "bg-red-900/50 border-red-500 text-red-200" : "bg-green-900/50 border-green-500 text-green-200"}`}>
+          <div className="mb-6 p-4 bg-zinc-900 border border-red-600 text-center font-bold uppercase tracking-widest text-xs">
             {message}
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-          
-          {/* Form Info */}
-          <form onSubmit={handleSaveChanges} className="space-y-8">
-            
-            {/* Personal Details */}
-            <section className="bg-zinc-950 p-6 rounded border border-zinc-800">
-              <h2 className="text-xl font-bold tracking-widest text-zinc-400 mb-4 uppercase">Personal Info</h2>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs uppercase tracking-widest text-zinc-500 mb-1">Email Address (Uneditable)</label>
-              
-                  <input type="email" value={email} readOnly className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-zinc-500 cursor-not-allowed" />
-                </div>
-                <div>
-                  <label className="block text-xs uppercase tracking-widest text-zinc-500 mb-1">Full Name</label>
-                  <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-white focus:border-red-600 outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs uppercase tracking-widest text-zinc-500 mb-1">Phone Number</label>
-                  <input type="text" value={phone} onChange={e => setPhone(e.target.value)} className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-white focus:border-red-600 outline-none" />
-                </div>
-              </div>
-            </section>
+        <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-8">
 
-            {/* Address */}
-            <section className="bg-zinc-950 p-6 rounded border border-zinc-800">
-              <h2 className="text-xl font-bold tracking-widest text-zinc-400 mb-4 uppercase">Home Address</h2>
+          <div className="bg-zinc-950 p-6 rounded border border-zinc-800">
+            <h2 className="text-red-600 font-bold mb-4 uppercase tracking-widest text-sm border-b border-zinc-800 pb-2">Personal Info</h2>
+
+            <label className="block text-[10px] text-zinc-500 uppercase mb-1">Email Address (Read-Only)</label>
+            <input
+              type="email"
+              value={profile.email || ""}
+              disabled
+              className="w-full bg-zinc-900 border border-zinc-700 p-2 mb-4 text-zinc-500 cursor-not-allowed"
+            />
+
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs uppercase tracking-widest text-zinc-500 mb-1">Primary Address</label>
-                <textarea value={address} onChange={e => setAddress(e.target.value)} className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-white focus:border-red-600 outline-none resize-none h-20" />
+                <label className="block text-[10px] text-zinc-500 uppercase mb-1">First Name</label>
+                <input
+                  type="text"
+                  value={profile.firstName || ""}
+                  onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
+                  className="w-full bg-zinc-900 border border-zinc-700 p-2 mb-4 focus:border-red-600 outline-none transition"
+                />
               </div>
-            </section>
-
-            {/* Security */}
-            <section className="bg-zinc-950 p-6 rounded border border-zinc-800">
-              <h2 className="text-xl font-bold tracking-widest text-zinc-400 mb-4 uppercase">Change Password</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs uppercase tracking-widest text-zinc-500 mb-1">Current Password *</label>
-                  <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Required to make changes" className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-white focus:border-red-600 outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs uppercase tracking-widest text-zinc-500 mb-1">New Password</label>
-                  <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-white focus:border-red-600 outline-none" />
-                </div>
+              <div>
+                <label className="block text-[10px] text-zinc-500 uppercase mb-1">Last Name</label>
+                <input
+                  type="text"
+                  value={profile.lastName || ""}
+                  onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
+                  className="w-full bg-zinc-900 border border-zinc-700 p-2 mb-4 focus:border-red-600 outline-none transition"
+                />
               </div>
-            </section>
+            </div>
+          </div>
 
-            <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold tracking-widest uppercase py-3 rounded transition">
-              Save All Changes
-            </button>
-          </form>
+          <div className="bg-zinc-950 p-6 rounded border border-zinc-800">
+            <h2 className="text-red-600 font-bold mb-4 uppercase tracking-widest text-sm border-b border-zinc-800 pb-2">Home Address</h2>
 
-          {/* Cards & Favorites */}
-          <div className="space-y-8">
-            
-            {/* Payment Cards */}
-            <section className="bg-zinc-950 p-6 rounded border border-zinc-800">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold tracking-widest text-zinc-400 uppercase">Payment Cards</h2>
-                <span className="text-xs font-bold text-zinc-500 bg-zinc-900 px-2 py-1 rounded">{cards.length} / 3</span>
-              </div>
-              
-              <div className="space-y-3 mb-4">
-                {cards.map(card => (
-                  <div key={card.id} className="flex justify-between items-center bg-zinc-900 border border-zinc-700 p-3 rounded">
-                    <span className="text-sm font-mono tracking-widest">•••• {card.last4}</span>
-                    <button onClick={() => handleRemoveCard(card.id)} className="text-red-500 hover:text-red-400 text-xs uppercase font-bold tracking-widest">Remove</button>
-                  </div>
-                ))}
-                {cards.length === 0 && <div className="text-zinc-600 text-sm italic">No cards saved.</div>}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] text-zinc-500 uppercase mb-1">Street Address</label>
+                <input
+                  type="text"
+                  value={profile.address?.street || ""}
+                  onChange={(e) => setProfile({ ...profile, address: { ...profile.address, street: e.target.value } })}
+                  className="w-full bg-zinc-900 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
+                />
               </div>
 
-              {cards.length < 3 ? (
-                <div className="flex gap-2">
-                  <input type="text" value={newCardInput} onChange={e => setNewCardInput(e.target.value)} placeholder="Card Number" className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-white text-sm outline-none" />
-                  <button onClick={handleAddCard} className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white px-4 rounded text-sm font-bold uppercase tracking-widest transition">Add</button>
-                </div>
-              ) : (
-                <div className="text-xs text-red-500 uppercase tracking-widest mt-2">Maximum of 3 cards reached.</div>
-              )}
-            </section>
-
-            {/* Favorite Movies */}
-            <section className="bg-zinc-950 p-6 rounded border border-zinc-800">
-              <h2 className="text-xl font-bold tracking-widest text-zinc-400 mb-4 uppercase">My Favorites</h2>
               <div className="grid grid-cols-2 gap-4">
-                {favorites.map(fav => (
-                  <div key={fav.id} className="relative group cursor-pointer border border-zinc-800 rounded overflow-hidden">
-                    <img src={fav.poster_url} alt={fav.title} className="w-full h-32 object-cover opacity-70 group-hover:opacity-100 transition" />
-                    <div className="absolute bottom-0 inset-x-0 bg-black/80 p-2 text-center text-xs font-bold uppercase tracking-widest truncate">
-                      {fav.title}
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-[10px] text-zinc-500 uppercase mb-1">City</label>
+                  <input
+                    type="text"
+                    value={profile.address?.city || ""}
+                    onChange={(e) => setProfile({ ...profile, address: { ...profile.address, city: e.target.value } })}
+                    className="w-full bg-zinc-900 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 col-span-2 sm:col-span-1">
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase mb-1">State</label>
+                    <input
+                      type="text"
+                      value={profile.address?.state || ""}
+                      onChange={(e) => setProfile({ ...profile, address: { ...profile.address, state: e.target.value } })}
+                      className="w-full bg-zinc-900 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase mb-1">ZIP Code</label>
+                    <input
+                      type="text"
+                      value={profile.address?.zipCode || ""}
+                      onChange={(e) => setProfile({ ...profile, address: { ...profile.address, zipCode: e.target.value } })}
+                      className="w-full bg-zinc-900 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-zinc-600 mt-4 uppercase tracking-tighter">* Restricted to one primary address.</p>
+          </div>
+
+          <div className="bg-zinc-950 p-6 rounded border border-zinc-800 md:col-span-2">
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-2 mb-4">
+              <h2 className="text-red-600 font-bold uppercase tracking-widest text-sm">
+                Payment Methods ({(profile.cards || []).length}/3)
+              </h2>
+              {(profile.cards || []).length < 3 && (
+                <button
+                  type="button"
+                  onClick={handleAddCard}
+                  className="text-[10px] bg-zinc-800 hover:bg-zinc-700 px-3 py-1 rounded uppercase tracking-widest transition"
+                >
+                  + Add Card
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {(profile.cards || []).map((card, index) => (
+                <div
+                  key={card.id || index}
+                  className="bg-zinc-900 p-4 border border-zinc-700 rounded space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-zinc-800 p-2 rounded text-[10px]">💳</div>
+                      <span className="text-xs uppercase tracking-widest text-zinc-400">
+                        Card {index + 1}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCard(index)}
+                      className="text-[10px] text-red-600 hover:text-red-400 uppercase font-bold transition"
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase mb-1">
+                        Last 4 Digits
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={4}
+                        value={card.last4}
+                        onChange={(e) => {
+                          const updatedCards = [...profile.cards];
+                          updatedCards[index] = {
+                            ...updatedCards[index],
+                            last4: e.target.value.replace(/\D/g, "").slice(0, 4),
+                          };
+                          setProfile({ ...profile, cards: updatedCards });
+                        }}
+                        className="w-full bg-zinc-950 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase mb-1">
+                        Expiration Date
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="MM/YY"
+                        maxLength={5}
+                        value={card.exp}
+                        onChange={(e) => {
+                          const updatedCards = [...profile.cards];
+                          updatedCards[index] = {
+                            ...updatedCards[index],
+                            exp: e.target.value,
+                          };
+                          setProfile({ ...profile, cards: updatedCards });
+                        }}
+                        className="w-full bg-zinc-950 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
+                      />
                     </div>
                   </div>
-                ))}
-              </div>
-            </section>
-
+                </div>
+              ))}
+              {(profile.cards || []).length === 0 && (
+                <p className="text-zinc-600 text-xs">No payment cards saved.</p>
+              )}
+            </div>
           </div>
-        </div>
+
+          <div className="bg-zinc-950 p-6 rounded border border-zinc-800 md:col-span-2">
+            <h2 className="text-red-600 font-bold mb-4 uppercase tracking-widest text-sm border-b border-zinc-800 pb-2">My Favorites</h2>
+            <div className="flex flex-wrap gap-4">
+              {(profile.favorites || []).map((fav, index) => (
+                <div
+                  key={fav.id}
+                  className="bg-zinc-900 border border-zinc-700 px-4 py-2 rounded text-xs uppercase tracking-widest flex items-center justify-between gap-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-red-500">♥</span> {fav.title}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(`/api/profile/favorites/${fav.id}`, {
+                          method: "DELETE",
+                        });
+
+                        const data = await res.json();
+
+                        if (res.ok) {
+                          setMessage(data.message || "Favorite removed.");
+                          await loadProfile();
+                        } else {
+                          setMessage(data.message || data.error || "Failed to remove favorite.");
+                        }
+                      } catch (err) {
+                        console.error("Error removing favorite:", err);
+                        setMessage("Could not remove favorite.");
+                      }
+                    }}
+                    className="text-[10px] text-red-600 hover:text-red-400 uppercase font-bold"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button type="submit" className="md:col-span-2 bg-red-600 hover:bg-red-700 py-4 font-bold uppercase tracking-widest rounded transition">
+            Save All Changes
+          </button>
+        </form>
       </div>
     </div>
   );
