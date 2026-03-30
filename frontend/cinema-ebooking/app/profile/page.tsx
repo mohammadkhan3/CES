@@ -23,12 +23,7 @@ export default function ProfilePage() {
     firstName: "",
     lastName: "",
     email: "",
-    address: {
-      street: "",
-      city: "",
-      state: "",
-      zipCode: ""
-    },
+    address: { street: "", city: "", state: "", zipCode: "" },
     cards: [] as { id: string; last4: string; exp: string }[],
     favorites: [] as { id: string; title: string }[]
   });
@@ -64,26 +59,21 @@ export default function ProfilePage() {
         const data = await res.json();
         setProfile({
           firstName: data.firstName || "",
-          lastName: data.lastName || "",
-          email: data.email || "",
-          address: data.mailingAddress || {
-            street: "",
-            city: "",
-            state: "",
-            zipCode: ""
-          },
+          lastName:  data.lastName  || "",
+          email:     data.email     || "",
+          address: data.mailingAddress || { street: "", city: "", state: "", zipCode: "" },
           cards: Array.isArray(data.cards)
             ? data.cards.map((card: { id?: string; last4?: string; exp?: string }) => ({
-              id: card.id || "",
-              last4: card.last4 || "",
-              exp: card.exp || ""
-            }))
+                id:   card.id   || "",
+                last4: card.last4 || "",
+                exp:  card.exp  || ""
+              }))
             : [],
           favorites: Array.isArray(data.favorites)
             ? data.favorites.map((fav: { id?: string; title?: string }) => ({
-              id: fav.id || "",
-              title: fav.title || ""
-            }))
+                id:    fav.id    || "",
+                title: fav.title || ""
+              }))
             : []
         });
       } else {
@@ -105,6 +95,7 @@ export default function ProfilePage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setMessage("");
 
     // Password validation
     if (newPassword) {
@@ -134,7 +125,7 @@ export default function ProfilePage() {
           email: profile.email,
           mailingAddress: profile.address,
           cards: profile.cards.map((card, index) => ({
-            id: card.id || String(index + 1),
+            id:   card.id || String(index + 1),
             last4: card.last4,
             exp: card.exp
           })),
@@ -162,14 +153,7 @@ export default function ProfilePage() {
     if (profile.cards.length < 3) {
       setProfile({
         ...profile,
-        cards: [
-          ...profile.cards,
-          {
-            id: String(profile.cards.length + 1),
-            last4: "",
-            exp: ""
-          }
-        ]
+        cards: [...profile.cards, { id: String(profile.cards.length + 1), last4: "", exp: "" }]
       });
     }
   };
@@ -179,7 +163,11 @@ export default function ProfilePage() {
   };
 
   if (loading) {
-    return <div className="min-h-screen bg-black text-white flex justify-center items-center">Loading Profile Data...</div>;
+    return (
+      <div className="min-h-screen bg-black text-white flex justify-center items-center">
+        Loading Profile Data...
+      </div>
+    );
   }
 
   return (
@@ -190,17 +178,18 @@ export default function ProfilePage() {
         </h1>
 
         {message && (
-          <div
-            className={`mb-6 p-4 border text-center font-bold uppercase tracking-widest text-xs ${message.startsWith("Error")
+          <div className={`mb-6 p-4 border text-center font-bold uppercase tracking-widest text-xs ${
+            message.startsWith("Error")
               ? "bg-red-900/50 border-red-500 text-red-200"
               : "bg-zinc-900 border-red-600"
-              }`}
-          >
+          }`}>
             {message}
           </div>
         )}
 
         <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+          {/* Personal Info */}
           <div className="bg-zinc-950 p-6 rounded border border-zinc-800">
             <h2 className="text-red-600 font-bold mb-4 uppercase tracking-widest text-sm border-b border-zinc-800 pb-2">
               Personal Info
@@ -238,11 +227,11 @@ export default function ProfilePage() {
             </div>
           </div>
 
+          {/* Home Address */}
           <div className="bg-zinc-950 p-6 rounded border border-zinc-800">
             <h2 className="text-red-600 font-bold mb-4 uppercase tracking-widest text-sm border-b border-zinc-800 pb-2">
               Home Address
             </h2>
-
             <div className="space-y-4">
               <div>
                 <label className="block text-[10px] text-zinc-500 uppercase mb-1">Street Address</label>
@@ -258,7 +247,6 @@ export default function ProfilePage() {
                   className="w-full bg-zinc-900 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
                 />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 sm:col-span-1">
                   <label className="block text-[10px] text-zinc-500 uppercase mb-1">City</label>
@@ -274,7 +262,6 @@ export default function ProfilePage() {
                     className="w-full bg-zinc-900 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
                   />
                 </div>
-
                 <div className="grid grid-cols-2 gap-2 col-span-2 sm:col-span-1">
                   <div>
                     <label className="block text-[10px] text-zinc-500 uppercase mb-1">State</label>
@@ -307,17 +294,21 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
-
             <p className="text-[10px] text-zinc-600 mt-4 uppercase tracking-tighter">
               * Restricted to one primary address.
             </p>
           </div>
 
+            <p className="text-[10px] text-zinc-600 mt-4 uppercase tracking-tighter">
+              * Restricted to one primary address.
+            </p>
+          </div>
+        
+          {/* Change Password */}
           <div className="bg-zinc-950 p-6 rounded border border-zinc-800 md:col-span-2">
             <h2 className="text-red-600 font-bold mb-4 uppercase tracking-widest text-sm border-b border-zinc-800 pb-2">
               Change Password
             </h2>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-[10px] text-zinc-500 uppercase mb-1">
@@ -331,7 +322,6 @@ export default function ProfilePage() {
                   className="w-full bg-zinc-900 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
                 />
               </div>
-
               <div>
                 <label className="block text-[10px] text-zinc-500 uppercase mb-1">New Password</label>
                 <input
@@ -342,13 +332,14 @@ export default function ProfilePage() {
                 />
                 {newPassword.length > 0 && (
                   <ul className="mt-2 space-y-1">
-                    {PASSWORD_RULES.map((rule) => {
+                    {PASSWORD_RULES.map(rule => {
                       const passed = rule.test(newPassword);
                       return (
                         <li
                           key={rule.label}
-                          className={`text-xs tracking-wide flex items-center gap-1.5 ${passed ? "text-green-400" : "text-zinc-500"
-                            }`}
+                          className={`text-xs tracking-wide flex items-center gap-1.5 ${
+                            passed ? "text-green-400" : "text-zinc-500"
+                          }`}
                         >
                           <span>{passed ? "✓" : "○"}</span>
                           {rule.label}
@@ -361,6 +352,7 @@ export default function ProfilePage() {
             </div>
           </div>
 
+          {/* Payment Cards */}
           <div className="bg-zinc-950 p-6 rounded border border-zinc-800 md:col-span-2">
             <div className="flex justify-between items-center border-b border-zinc-800 pb-2 mb-4">
               <h2 className="text-red-600 font-bold uppercase tracking-widest text-sm">
@@ -383,9 +375,7 @@ export default function ProfilePage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="bg-zinc-800 p-2 rounded text-[10px]">💳</div>
-                      <span className="text-xs uppercase tracking-widest text-zinc-400">
-                        Card {index + 1}
-                      </span>
+                      <span className="text-xs uppercase tracking-widest text-zinc-400">Card {index + 1}</span>
                     </div>
                     <button
                       type="button"
@@ -395,7 +385,6 @@ export default function ProfilePage() {
                       Remove
                     </button>
                   </div>
-
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[10px] text-zinc-500 uppercase mb-1">Last 4 Digits</label>
@@ -405,16 +394,12 @@ export default function ProfilePage() {
                         value={card.last4}
                         onChange={(e) => {
                           const updated = [...profile.cards];
-                          updated[index] = {
-                            ...updated[index],
-                            last4: e.target.value.replace(/\D/g, "").slice(0, 4)
-                          };
+                          updated[index] = { ...updated[index], last4: e.target.value.replace(/\D/g, "").slice(0, 4) };
                           setProfile({ ...profile, cards: updated });
                         }}
                         className="w-full bg-zinc-950 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
                       />
                     </div>
-
                     <div>
                       <label className="block text-[10px] text-zinc-500 uppercase mb-1">Expiration Date</label>
                       <input
@@ -424,10 +409,7 @@ export default function ProfilePage() {
                         value={card.exp}
                         onChange={(e) => {
                           const updated = [...profile.cards];
-                          updated[index] = {
-                            ...updated[index],
-                            exp: e.target.value
-                          };
+                          updated[index] = { ...updated[index], exp: e.target.value };
                           setProfile({ ...profile, cards: updated });
                         }}
                         className="w-full bg-zinc-950 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
@@ -436,18 +418,17 @@ export default function ProfilePage() {
                   </div>
                 </div>
               ))}
-
               {profile.cards.length === 0 && (
                 <p className="text-zinc-600 text-xs">No payment cards saved.</p>
               )}
             </div>
           </div>
 
+          {/* Favorites */}
           <div className="bg-zinc-950 p-6 rounded border border-zinc-800 md:col-span-2">
             <h2 className="text-red-600 font-bold mb-4 uppercase tracking-widest text-sm border-b border-zinc-800 pb-2">
               My Favorites
             </h2>
-
             <div className="flex flex-wrap gap-4">
               {profile.favorites.map((fav) => (
                 <div
@@ -484,11 +465,8 @@ export default function ProfilePage() {
                   </button>
                 </div>
               ))}
-
               {profile.favorites.length === 0 && (
-                <p className="text-zinc-600 text-xs">
-                  No favorites yet. Browse movies and click ♥ to add some!
-                </p>
+                <p className="text-zinc-600 text-xs">No favorites yet. Browse movies and click ♥ to add some!</p>
               )}
             </div>
           </div>
@@ -499,6 +477,7 @@ export default function ProfilePage() {
           >
             Save All Changes
           </button>
+
         </form>
       </div>
     </div>
