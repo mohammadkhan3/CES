@@ -30,14 +30,25 @@ async function normalizeUpstreamResponse(upstream: Response) {
 export async function GET(req: Request) {
   const headers = Object.fromEntries(req.headers);
 
-  const upstream = await fetch(`${BACKEND_BASE}/api/profile`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      "X-User-Email": headers["x-user-email"] || "",
-    },
-    cache: "no-store",
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${BACKEND_BASE}/api/profile`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "X-User-Email": headers["x-user-email"] || "",
+      },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch {
+    return NextResponse.json({ message: "Profile service unavailable" }, { status: 503 });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   return normalizeUpstreamResponse(upstream);
 }

@@ -299,11 +299,6 @@ export default function ProfilePage() {
             </p>
           </div>
 
-            <p className="text-[10px] text-zinc-600 mt-4 uppercase tracking-tighter">
-              * Restricted to one primary address.
-            </p>
-          </div>
-        
           {/* Change Password */}
           <div className="bg-zinc-950 p-6 rounded border border-zinc-800 md:col-span-2">
             <h2 className="text-red-600 font-bold mb-4 uppercase tracking-widest text-sm border-b border-zinc-800 pb-2">
