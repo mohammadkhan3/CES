@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
 type Movie = {
   id: string;
@@ -34,15 +35,34 @@ export default function MovieModal({
   movie: Movie;
   onClose: () => void;
 }) {
+  const [favoriteMessage, setFavoriteMessage] = useState("");
+
   if (!movie) return null;
 
   const showtimes = ["2:00 PM", "5:00 PM", "8:00 PM"];
 
+  const handleAddFavorite = async () => {
+    try {
+      const res = await fetch(`/api/profile/favorites/${movie.id}`, {
+        method: "POST",
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setFavoriteMessage(data.message || "Added to favorites.");
+      } else {
+        setFavoriteMessage(data.message || data.error || "Failed to add favorite.");
+      }
+    } catch (error) {
+      console.error("Error adding favorite:", error);
+      setFavoriteMessage("Could not add favorite.");
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-      {/* the modal box */}
       <div className="relative bg-zinc-950 border border-zinc-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto flex flex-col md:flex-row shadow-2xl">
-        {/* close button */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-zinc-500 hover:text-white font-bold text-2xl z-10 transition"
@@ -50,7 +70,6 @@ export default function MovieModal({
           &times;
         </button>
 
-        {/* poster */}
         <div className="w-full md:w-1/3 bg-zinc-900 border-r border-zinc-800">
           {movie.poster_url ? (
             <img
@@ -65,24 +84,37 @@ export default function MovieModal({
           )}
         </div>
 
-        {/* movie details & video */}
         <div className="p-8 md:w-2/3 flex flex-col text-white">
           <h2 className="text-3xl font-diplomata uppercase tracking-wider mb-2">
             {movie.title}
           </h2>
 
-          {/* rating and genre */}
           <div className="flex gap-3 text-xs text-red-500 mb-6 uppercase tracking-widest font-bold">
             <span>{movie.rating || "PG-13"}</span>
             <span>|</span>
             <span className="text-zinc-400">{movie.genre || "Action"}</span>
           </div>
 
+          <div className="mb-6 flex flex-wrap gap-3 items-center">
+            <button
+              type="button"
+              onClick={handleAddFavorite}
+              className="bg-zinc-800 hover:bg-red-600 border border-zinc-700 hover:border-red-600 transition px-4 py-2 rounded text-xs font-bold tracking-widest uppercase text-red-400 hover:text-white"
+            >
+              ♥ Add to Favorites
+            </button>
+
+            {favoriteMessage && (
+              <span className="text-[10px] uppercase tracking-widest text-zinc-400">
+                {favoriteMessage}
+              </span>
+            )}
+          </div>
+
           <p className="text-sm text-zinc-300 mb-6 leading-relaxed">
             {movie.description || "No description available in the database yet."}
           </p>
 
-          {/* embedded trailer */}
           <div className="w-full aspect-video bg-black mb-8 border border-zinc-800 rounded overflow-hidden">
             {movie.trailer_url ? (
               <iframe
@@ -99,24 +131,23 @@ export default function MovieModal({
             )}
           </div>
 
-          {/* showtimes & booking buttons */}
           {movie.status !== "coming_soon" && (
-          <div className="mt-auto">
-            <h3 className="text-sm font-bold uppercase tracking-widest mb-3 text-zinc-400">
-              Select Showtime to Book
-            </h3>
-            <div className="flex flex-wrap gap-3">
-              {showtimes.map((time) => (
-                <Link
-                  key={time}
-                  href={`/booking?title=${encodeURIComponent(movie.title)}&showtime=${encodeURIComponent(time)}`}
-                  className="bg-zinc-800 hover:bg-red-600 border border-zinc-700 hover:border-red-600 transition px-5 py-2 rounded text-sm font-bold tracking-widest"
-                >
-                  {time}
-                </Link>
-              ))}
+            <div className="mt-auto">
+              <h3 className="text-sm font-bold uppercase tracking-widest mb-3 text-zinc-400">
+                Select Showtime to Book
+              </h3>
+              <div className="flex flex-wrap gap-3">
+                {showtimes.map((time) => (
+                  <Link
+                    key={time}
+                    href={`/booking?title=${encodeURIComponent(movie.title)}&showtime=${encodeURIComponent(time)}`}
+                    className="bg-zinc-800 hover:bg-red-600 border border-zinc-700 hover:border-red-600 transition px-5 py-2 rounded text-sm font-bold tracking-widest"
+                  >
+                    {time}
+                  </Link>
+                ))}
+              </div>
             </div>
-          </div>
           )}
         </div>
       </div>

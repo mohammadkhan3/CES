@@ -13,34 +13,56 @@ export default function ProfilePage() {
       state: "",
       zipCode: ""
     },
-    cards: [] as string[],
-    favorites: [] as string[]
+    cards: [] as { id: string; last4: string; exp: string }[],
+    favorites: [] as { id: string; title: string }[]
   });
 
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
-  useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        const res = await fetch("http://localhost:5000/api/profile");
-        if (res.ok) {
-          const data = await res.json();
-          setProfile({
-            ...data,
-            address: data.mailingAddress || { street: "", city: "", state: "", zipCode: "" }
-          });
-        } else {
-          setMessage("Failed to load profile data.");
-        }
-      } catch (error) {
-        console.error("Error fetching profile:", error);
-        setMessage("Could not connect to the database.");
-      } finally {
-        setLoading(false);
-      }
-    };
+  const loadProfile = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/profile", { cache: "no-store" });
 
+      if (res.ok) {
+        const data = await res.json();
+        setProfile({
+          firstName: data.firstName || "",
+          lastName: data.lastName || "",
+          email: data.email || "",
+          address: data.mailingAddress || {
+            street: "",
+            city: "",
+            state: "",
+            zipCode: ""
+          },
+          cards: Array.isArray(data.cards)
+            ? data.cards.map((card: { id?: string; last4?: string; exp?: string }) => ({
+              id: card.id || "",
+              last4: card.last4 || "",
+              exp: card.exp || ""
+            }))
+            : [],
+          favorites: Array.isArray(data.favorites)
+            ? data.favorites.map((fav: { id?: string; title?: string }) => ({
+              id: fav.id || "",
+              title: fav.title || ""
+            }))
+            : []
+        });
+      } else {
+        setMessage("Failed to load profile data.");
+      }
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+      setMessage("Could not connect to the database.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadProfile();
   }, []);
 
@@ -49,19 +71,26 @@ export default function ProfilePage() {
     setMessage("Saving to database...");
 
     try {
-      const res = await fetch("http://localhost:5000/api/profile/update", {
-        method: "POST",
+      const res = await fetch("/api/profile", {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...profile,
-          mailingAddress: profile.address
+          mailingAddress: profile.address,
+          cards: profile.cards.map((card, index) => ({
+            id: card.id || String(index + 1),
+            last4: card.last4,
+            exp: card.exp
+          }))
         }),
       });
-      
+
+      const data = await res.json();
+
       if (res.ok) {
-        setMessage("Profile successfully updated!");
+        setMessage(data.message || "Profile successfully updated!");
+        await loadProfile();
       } else {
-        setMessage("Failed to update profile.");
+        setMessage(data.message || data.error || "Failed to update profile.");
       }
     } catch (error) {
       console.error("Error saving profile:", error);
@@ -71,7 +100,17 @@ export default function ProfilePage() {
 
   const handleAddCard = () => {
     if (profile.cards.length < 3) {
-      setProfile({ ...profile, cards: [...profile.cards, "9999"] });
+      setProfile({
+        ...profile,
+        cards: [
+          ...profile.cards,
+          {
+            id: String(profile.cards.length + 1),
+            last4: "",
+            exp: ""
+          }
+        ]
+      });
     }
   };
 
@@ -96,35 +135,35 @@ export default function ProfilePage() {
         )}
 
         <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          
+
           <div className="bg-zinc-950 p-6 rounded border border-zinc-800">
             <h2 className="text-red-600 font-bold mb-4 uppercase tracking-widest text-sm border-b border-zinc-800 pb-2">Personal Info</h2>
-            
+
             <label className="block text-[10px] text-zinc-500 uppercase mb-1">Email Address (Read-Only)</label>
-            <input 
-              type="email" 
-              value={profile.email || ""} 
-              disabled 
-              className="w-full bg-zinc-900 border border-zinc-700 p-2 mb-4 text-zinc-500 cursor-not-allowed" 
+            <input
+              type="email"
+              value={profile.email || ""}
+              disabled
+              className="w-full bg-zinc-900 border border-zinc-700 p-2 mb-4 text-zinc-500 cursor-not-allowed"
             />
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] text-zinc-500 uppercase mb-1">First Name</label>
-                <input 
-                  type="text" 
-                  value={profile.firstName || ""} 
-                  onChange={(e) => setProfile({...profile, firstName: e.target.value})}
-                  className="w-full bg-zinc-900 border border-zinc-700 p-2 mb-4 focus:border-red-600 outline-none transition" 
+                <input
+                  type="text"
+                  value={profile.firstName || ""}
+                  onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
+                  className="w-full bg-zinc-900 border border-zinc-700 p-2 mb-4 focus:border-red-600 outline-none transition"
                 />
               </div>
               <div>
                 <label className="block text-[10px] text-zinc-500 uppercase mb-1">Last Name</label>
-                <input 
-                  type="text" 
-                  value={profile.lastName || ""} 
-                  onChange={(e) => setProfile({...profile, lastName: e.target.value})}
-                  className="w-full bg-zinc-900 border border-zinc-700 p-2 mb-4 focus:border-red-600 outline-none transition" 
+                <input
+                  type="text"
+                  value={profile.lastName || ""}
+                  onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
+                  className="w-full bg-zinc-900 border border-zinc-700 p-2 mb-4 focus:border-red-600 outline-none transition"
                 />
               </div>
             </div>
@@ -132,45 +171,45 @@ export default function ProfilePage() {
 
           <div className="bg-zinc-950 p-6 rounded border border-zinc-800">
             <h2 className="text-red-600 font-bold mb-4 uppercase tracking-widest text-sm border-b border-zinc-800 pb-2">Home Address</h2>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-[10px] text-zinc-500 uppercase mb-1">Street Address</label>
-                <input 
+                <input
                   type="text"
                   value={profile.address?.street || ""}
-                  onChange={(e) => setProfile({...profile, address: {...profile.address, street: e.target.value}})}
+                  onChange={(e) => setProfile({ ...profile, address: { ...profile.address, street: e.target.value } })}
                   className="w-full bg-zinc-900 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
                 />
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 sm:col-span-1">
                   <label className="block text-[10px] text-zinc-500 uppercase mb-1">City</label>
-                  <input 
+                  <input
                     type="text"
                     value={profile.address?.city || ""}
-                    onChange={(e) => setProfile({...profile, address: {...profile.address, city: e.target.value}})}
+                    onChange={(e) => setProfile({ ...profile, address: { ...profile.address, city: e.target.value } })}
                     className="w-full bg-zinc-900 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-2 col-span-2 sm:col-span-1">
                   <div>
                     <label className="block text-[10px] text-zinc-500 uppercase mb-1">State</label>
-                    <input 
+                    <input
                       type="text"
                       value={profile.address?.state || ""}
-                      onChange={(e) => setProfile({...profile, address: {...profile.address, state: e.target.value}})}
+                      onChange={(e) => setProfile({ ...profile, address: { ...profile.address, state: e.target.value } })}
                       className="w-full bg-zinc-900 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
                     />
                   </div>
                   <div>
                     <label className="block text-[10px] text-zinc-500 uppercase mb-1">ZIP Code</label>
-                    <input 
+                    <input
                       type="text"
                       value={profile.address?.zipCode || ""}
-                      onChange={(e) => setProfile({...profile, address: {...profile.address, zipCode: e.target.value}})}
+                      onChange={(e) => setProfile({ ...profile, address: { ...profile.address, zipCode: e.target.value } })}
                       className="w-full bg-zinc-900 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
                     />
                   </div>
@@ -183,34 +222,85 @@ export default function ProfilePage() {
 
           <div className="bg-zinc-950 p-6 rounded border border-zinc-800 md:col-span-2">
             <div className="flex justify-between items-center border-b border-zinc-800 pb-2 mb-4">
-               <h2 className="text-red-600 font-bold uppercase tracking-widest text-sm">
-                 Payment Methods ({(profile.cards || []).length}/3)
-               </h2>
-               {(profile.cards || []).length < 3 && (
-                 <button 
-                   type="button" 
-                   onClick={handleAddCard}
-                   className="text-[10px] bg-zinc-800 hover:bg-zinc-700 px-3 py-1 rounded uppercase tracking-widest transition"
-                 >
-                   + Add Card
-                 </button>
-               )}
+              <h2 className="text-red-600 font-bold uppercase tracking-widest text-sm">
+                Payment Methods ({(profile.cards || []).length}/3)
+              </h2>
+              {(profile.cards || []).length < 3 && (
+                <button
+                  type="button"
+                  onClick={handleAddCard}
+                  className="text-[10px] bg-zinc-800 hover:bg-zinc-700 px-3 py-1 rounded uppercase tracking-widest transition"
+                >
+                  + Add Card
+                </button>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {(profile.cards || []).map((card, index) => (
-                <div key={index} className="bg-zinc-900 p-4 border border-zinc-700 flex justify-between items-center rounded">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-zinc-800 p-2 rounded text-[10px]">💳</div>
-                    <span className="text-sm tracking-widest">**** {card}</span>
+                <div
+                  key={card.id || index}
+                  className="bg-zinc-900 p-4 border border-zinc-700 rounded space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-zinc-800 p-2 rounded text-[10px]">💳</div>
+                      <span className="text-xs uppercase tracking-widest text-zinc-400">
+                        Card {index + 1}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCard(index)}
+                      className="text-[10px] text-red-600 hover:text-red-400 uppercase font-bold transition"
+                    >
+                      Remove
+                    </button>
                   </div>
-                  <button 
-                    type="button"
-                    onClick={() => handleRemoveCard(index)}
-                    className="text-[10px] text-red-600 hover:text-red-400 uppercase font-bold transition"
-                  >
-                    Remove
-                  </button>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase mb-1">
+                        Last 4 Digits
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={4}
+                        value={card.last4}
+                        onChange={(e) => {
+                          const updatedCards = [...profile.cards];
+                          updatedCards[index] = {
+                            ...updatedCards[index],
+                            last4: e.target.value.replace(/\D/g, "").slice(0, 4),
+                          };
+                          setProfile({ ...profile, cards: updatedCards });
+                        }}
+                        className="w-full bg-zinc-950 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase mb-1">
+                        Expiration Date
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="MM/YY"
+                        maxLength={5}
+                        value={card.exp}
+                        onChange={(e) => {
+                          const updatedCards = [...profile.cards];
+                          updatedCards[index] = {
+                            ...updatedCards[index],
+                            exp: e.target.value,
+                          };
+                          setProfile({ ...profile, cards: updatedCards });
+                        }}
+                        className="w-full bg-zinc-950 border border-zinc-700 p-2 focus:border-red-600 outline-none transition"
+                      />
+                    </div>
+                  </div>
                 </div>
               ))}
               {(profile.cards || []).length === 0 && (
@@ -223,13 +313,41 @@ export default function ProfilePage() {
             <h2 className="text-red-600 font-bold mb-4 uppercase tracking-widest text-sm border-b border-zinc-800 pb-2">My Favorites</h2>
             <div className="flex flex-wrap gap-4">
               {(profile.favorites || []).map((fav, index) => (
-                <div key={index} className="bg-zinc-900 border border-zinc-700 px-4 py-2 rounded text-xs uppercase tracking-widest flex items-center gap-2">
-                  <span className="text-red-500">♥</span> {fav}
+                <div
+                  key={fav.id}
+                  className="bg-zinc-900 border border-zinc-700 px-4 py-2 rounded text-xs uppercase tracking-widest flex items-center justify-between gap-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-red-500">♥</span> {fav.title}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(`/api/profile/favorites/${fav.id}`, {
+                          method: "DELETE",
+                        });
+
+                        const data = await res.json();
+
+                        if (res.ok) {
+                          setMessage(data.message || "Favorite removed.");
+                          await loadProfile();
+                        } else {
+                          setMessage(data.message || data.error || "Failed to remove favorite.");
+                        }
+                      } catch (err) {
+                        console.error("Error removing favorite:", err);
+                        setMessage("Could not remove favorite.");
+                      }
+                    }}
+                    className="text-[10px] text-red-600 hover:text-red-400 uppercase font-bold"
+                  >
+                    Remove
+                  </button>
                 </div>
               ))}
-              {(profile.favorites || []).length === 0 && (
-                <p className="text-zinc-600 text-xs">No movies favorited yet. Browse movies to add them here!</p>
-              )}
             </div>
           </div>
 
