@@ -1,16 +1,21 @@
 import os
 from datetime import datetime
+import re
 from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
 from cryptography.fernet import Fernet, InvalidToken
 from flask import Blueprint, jsonify, request
+from app.security import hash_password, verify_password
 
 from app.db import get_addresses_collection, get_movies_collection, get_users_collection
 from app.services.email import send_profile_update_email
 from app.utils import movie_to_json
 
 profile_bp = Blueprint("profile", __name__)
+
+# password policy (reuse simple rule used elsewhere)
+_PASSWORD_COMPLEXITY = re.compile(r"^(?=.*[A-Za-z])(?=.*\d).{8,}$")
 
 
 # -----------------------------
@@ -370,6 +375,32 @@ def update_profile():
             return jsonify({"message": "Users cannot store more than 3 payment cards."}), 400
 
         update_fields["paymentCards"] = _encrypt_cards(cards_payload)
+
+    # -----------------------------
+    # Change password support
+    # -----------------------------
+    # Expects: currentPassword, newPassword in the request body when changing password
+    new_password = str(data.get("newPassword", "") or "").strip()
+    if new_password:
+        current_password = str(data.get("currentPassword", "") or "").strip()
+        if not current_password:
+            return jsonify({"message": "Current password is required to change password."}), 400
+
+        # basic complexity check
+        if not _PASSWORD_COMPLEXITY.match(new_password):
+            return (
+                jsonify({"message": "New password must be at least 8 characters and include letters and numbers."}),
+                400,
+            )
+
+        # verify current password against stored hash
+        users = get_users_collection()
+        stored_user = users.find_one({"_id": user["_id"]})
+        if not stored_user or not verify_password(current_password, stored_user.get("password", "")):
+            return jsonify({"message": "Current password is incorrect."}), 401
+
+        # hash and schedule password update
+        update_fields["password"] = hash_password(new_password)
 
     get_users_collection().update_one(
         {"_id": user["_id"]},
