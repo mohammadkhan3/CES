@@ -54,6 +54,7 @@ Testing:
 ```bash
 cd backend
 source .venv/bin/activate
+pip install flask-cors 
 python seed.py
 python run.py
 ```
