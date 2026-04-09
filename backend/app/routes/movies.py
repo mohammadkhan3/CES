@@ -1,8 +1,8 @@
 import re
 from flask import Blueprint, request, jsonify
 from bson import ObjectId
-from app.db import get_movies_collection
-from app.utils import movie_to_json
+from app.db import get_movies_collection, get_shows_collection, get_showrooms_collection
+from app.utils import movie_to_json, showtime_to_json, showtimes_response_to_json
 
 movies_bp = Blueprint("movies", __name__)
 
@@ -36,6 +36,39 @@ def get_movie_details(movie_id: str):
         return jsonify({"message": "Movie not found"}), 404
 
     return jsonify({"data": movie_to_json(doc)}), 200
+
+
+@movies_bp.get("/movies/<string:movie_id>/showtimes")
+def get_movie_showtimes(movie_id: str):
+    try:
+        movie_oid = ObjectId(movie_id)
+    except Exception:
+        return jsonify({"message": "Invalid movie id"}), 400
+
+    movies = get_movies_collection()
+    movie_doc = movies.find_one({"_id": movie_oid})
+    if not movie_doc:
+        return jsonify({"message": "Movie not found"}), 404
+
+    shows = get_shows_collection()
+    showrooms = get_showrooms_collection()
+
+    show_docs = list(shows.find({"movieId": movie_oid}))
+
+    showroom_ids = [doc.get("showroomId") for doc in show_docs if doc.get("showroomId")]
+    showroom_map = {}
+    if showroom_ids:
+        for showroom_doc in showrooms.find({"_id": {"$in": showroom_ids}}):
+            showroom_map[str(showroom_doc["_id"])] = showroom_doc
+
+    showtime_list = []
+    for show_doc in show_docs:
+        showroom_doc = showroom_map.get(str(show_doc.get("showroomId", "")))
+        showtime_list.append(showtime_to_json(show_doc, showroom_doc))
+
+    showtime_list.sort(key=lambda item: (item.get("date", ""), item.get("time", "")))
+
+    return jsonify({"data": showtimes_response_to_json(movie_doc, showtime_list)}), 200
 
 
 # 2.3 Search title function
