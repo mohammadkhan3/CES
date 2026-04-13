@@ -254,19 +254,21 @@ theatre_id = theatre.inserted_id
 showroom1 = db["showrooms"].insert_one({
     "theatreId": theatre_id,
     "name": "Screen 1",
-    "numberOfSeats": 70,
+    "numberOfSeats": 48,
 })
 showroom2 = db["showrooms"].insert_one({
     "theatreId": theatre_id,
     "name": "Screen 2",
-    "numberOfSeats": 70,
+    "numberOfSeats": 48,
 })
 print(f"Seeded 1 theatre & 2 showrooms")
 
 seat_ids_1 = []
 seat_ids_2 = []
-for row in ["A", "B"]:
-    for num in range(1, 4):
+rows = ["A", "B", "C", "D", "E", "F"]
+seats_per_row = 8
+for row in rows:
+    for num in range(1, seats_per_row + 1):
         seat = db["seats"].insert_one({
             "showroomId": showroom1.inserted_id,
             "seatNumber": str(num),

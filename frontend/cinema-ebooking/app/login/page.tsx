@@ -1,9 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 export default function LoginPage() {
+
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,10 +43,17 @@ export default function LoginPage() {
 
       localStorage.setItem("user", JSON.stringify(data.data));
 
+      const redirect = searchParams.get("redirect");
+
+      if (redirect) {
+        router.push(redirect);
+        return;
+      }
+
       if (data.data.role === "admin") {
-        window.location.href = "/admin";
+        router.push("/admin");
       } else {
-        window.location.href = "/";
+        router.push("/");
       }
     } catch {
       setError("Something went wrong. Please try again.");

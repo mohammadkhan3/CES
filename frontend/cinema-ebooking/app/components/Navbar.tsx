@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function Navbar() {
   const router = useRouter();
   const sp = useSearchParams();
+  const pathname = usePathname();
 
   const [q, setQ] = useState(sp.get("q") ?? "");
   const [genre, setGenre] = useState(sp.get("genre") ?? "All Genres");
@@ -36,11 +37,31 @@ export default function Navbar() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
+  const syncAuthState = () => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      setIsLoggedIn(!!user?.userId);
+      setIsAdmin(user?.role === "admin");
+    } catch {
+      setIsLoggedIn(false);
+      setIsAdmin(false);
+    }
+  };
+
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("user") || "{}");
-    setIsLoggedIn(!!user?.userId);
-    setIsAdmin(user?.role === "admin");
+    syncAuthState();
+
+    const handleStorage = () => syncAuthState();
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+    };
   }, []);
+
+  useEffect(() => {
+    syncAuthState();
+  }, [pathname]);
 
   const handleLogout = () => setShowConfirm(true);
 
@@ -52,9 +73,7 @@ export default function Navbar() {
     } catch {}
   
     localStorage.removeItem("user");
-  
-    setIsLoggedIn(false);
-    setIsAdmin(false);
+    syncAuthState();
     setShowConfirm(false);
     router.push("/login");
   };
