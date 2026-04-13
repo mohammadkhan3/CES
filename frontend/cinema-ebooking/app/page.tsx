@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import MovieModal from "./components/MovieModal";
+import Link from "next/link";
 
 type Movie = {
   id: string;
@@ -13,6 +14,18 @@ type Movie = {
   rating?: string;
   poster_url?: string;
   trailer_url?: string;
+};
+
+type Showtime = {
+  id: string;
+  date: string;
+  time: string;
+  duration?: number;
+  showroom?: {
+    id: string;
+    name: string;
+  };
+  display?: string;
 };
 
 function SkeletonCard() {
@@ -32,12 +45,14 @@ function MovieCard({
   onClick,
   favoriteIds = [],
   onFavoriteChange,
+  showtimes = [],
 }: {
   movie: Movie;
   comingSoon?: boolean;
   onClick: () => void;
   favoriteIds?: string[];
   onFavoriteChange?: () => Promise<void> | void;
+  showtimes?: Showtime[];
 }) {
   const [isFavorite, setIsFavorite] = useState(favoriteIds.includes(movie.id));
 
@@ -135,14 +150,20 @@ function MovieCard({
 
       {!comingSoon && (
         <div className="mt-3 flex justify-center gap-2 flex-wrap">
-          {["2:00 PM", "5:00 PM", "8:00 PM"].map((time) => (
-            <span
-              key={time}
-              className="text-xs px-3 py-1 border border-zinc-600 rounded text-zinc-300"
-            >
-              {time}
-            </span>
-          ))}
+          {showtimes.length > 0 ? (
+            showtimes.slice(0, 3).map((show) => (
+              <Link
+                key={show.id}
+                href={`/booking?showId=${show.id}&title=${encodeURIComponent(movie.title)}&showtime=${encodeURIComponent(show.display || `${show.date} ${show.time}`)}`}
+                onClick={(e) => e.stopPropagation()}
+                className="text-xs px-3 py-1 border border-zinc-600 rounded text-zinc-300 hover:border-red-500 hover:text-white transition"
+              >
+                {show.time}
+              </Link>
+            ))
+          ) : (
+            <span className="text-xs text-zinc-400">No showtimes available</span>
+          )}
         </div>
       )}
     </div>
@@ -162,6 +183,7 @@ export default function HomePage() {
 
   const [userEmail, setUserEmail] = useState("");
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [showtimesByMovie, setShowtimesByMovie] = useState<Record<string, Showtime[]>>({});
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -222,27 +244,45 @@ export default function HomePage() {
 
         const json = await res.json();
 
+        let runningMovies: Movie[] = [];
+        let comingSoonMovies: Movie[] = [];
+
         if (q || genre) {
           const list: Movie[] = Array.isArray(json?.data) ? json.data : [];
-          setRunning(list);
-          setComingSoon([]);
+          runningMovies = list;
+          comingSoonMovies = [];
         } else {
           const data = json?.data ?? {};
-          const r: Movie[] = Array.isArray(data.currently_running)
-            ? data.currently_running
-            : [];
-          const c: Movie[] = Array.isArray(data.coming_soon) ? data.coming_soon : [];
-          setRunning(r);
-          setComingSoon(c);
+          runningMovies = Array.isArray(data.currently_running) ? data.currently_running : [];
+          comingSoonMovies = Array.isArray(data.coming_soon) ? data.coming_soon : [];
         }
+         
+      setRunning(runningMovies);
+      setComingSoon(comingSoonMovies);
+
+      const showtimeEntries = await Promise.all(
+          runningMovies.map(async (movie) => {
+            try {
+              const res = await fetch(`/api/movies/${movie.id}/showtimes`, {
+                cache: "no-store",
+              });
+              const json = await res.json();
+              return [movie.id, Array.isArray(json?.data) ? json.data : []] as const;
+            } catch {
+              return [movie.id, []] as const;
+            }
+          })
+        );
+
+        setShowtimesByMovie(Object.fromEntries(showtimeEntries));
       } catch {
         setRunning([]);
         setComingSoon([]);
+        setShowtimesByMovie({});
       } finally {
         setLoading(false);
       }
     }
-
     load();
   }, [q, genre]);
 
@@ -281,6 +321,7 @@ export default function HomePage() {
                   onClick={() => setSelectedMovie(m)}
                   favoriteIds={favoriteIds}
                   onFavoriteChange={loadFavorites}
+                  showtimes={showtimesByMovie[m.id] || []}
                 />
               ))
             )}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type Movie = {
   id: string;
@@ -12,6 +12,18 @@ type Movie = {
   rating?: string;
   poster_url?: string;
   trailer_url?: string;
+};
+
+type Showtime = {
+  id: string;
+  date: string;
+  time: string;
+  duration?: number;
+  showroom?: {
+    id: string;
+    name: string;
+  };
+  display?: string;
 };
 
 function toEmbedUrl(url?: string) {
@@ -38,13 +50,62 @@ export default function MovieModal({
   userEmail: string;
 }) {
   const [favoriteMessage, setFavoriteMessage] = useState("");
+  const [showtimes, setShowtimes] = useState<Showtime[]>([]);
+  const [showtimesLoading, setShowtimesLoading] = useState(false);
+  const [showtimesError, setShowtimesError] = useState("");
 
   if (!movie) return null;
 
-  const showtimes = ["2:00 PM", "5:00 PM", "8:00 PM"];
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadShowtimes() {
+      if (!movie?.id || movie.status === "coming_soon") {
+        setShowtimes([]);
+        setShowtimesError("");
+        return;
+      }
+
+      try {
+        setShowtimesLoading(true);
+        setShowtimesError("");
+
+        const res = await fetch(`/api/movies/${movie.id}/showtimes`, {
+          cache: "no-store",
+        });
+
+        const json = await res.json();
+
+        if (!res.ok) {
+          throw new Error(json?.message || "Failed to load showtimes.");
+        }
+
+        if (!cancelled) {
+          setShowtimes(json.data || []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setShowtimes([]);
+          setShowtimesError(
+            error instanceof Error ? error.message : "Failed to load showtimes."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setShowtimesLoading(false);
+        }
+      }
+    }
+
+    loadShowtimes();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [movie?.id, movie?.status]);
 
   const handleAddFavorite = async () => {
-    if(!userEmail) {
+    if (!userEmail) {
       setFavoriteMessage("Could not identify logged in user.");
       return;
     }
@@ -147,17 +208,27 @@ export default function MovieModal({
               <h3 className="text-sm font-bold uppercase tracking-widest mb-3 text-zinc-400">
                 Select Showtime to Book
               </h3>
-              <div className="flex flex-wrap gap-3">
-                {showtimes.map((time) => (
-                  <Link
-                    key={time}
-                    href={`/booking?title=${encodeURIComponent(movie.title)}&showtime=${encodeURIComponent(time)}`}
-                    className="bg-zinc-800 hover:bg-red-600 border border-zinc-700 hover:border-red-600 transition px-5 py-2 rounded text-sm font-bold tracking-widest"
-                  >
-                    {time}
-                  </Link>
-                ))}
-              </div>
+              {showtimesLoading ? (
+                <p className="text-sm text-zinc-500">Loading showtimes...</p>
+              ) : showtimesError? (
+                <p className="text-sm text-red-500">{showtimesError}</p>
+              ) : showtimes.length > 0 ? (
+                <div className="flex flex-wrap gap-3">
+                  {showtimes.map((show) => (
+                    <Link
+                      key={show.id}
+                      href={`/booking?showId=${show.id}&title=${encodeURIComponent(movie.title)}&showtime=${encodeURIComponent(show.display ||  `${show.date} ${show.time}`)}`}
+                      className="bg-zinc-800 hover:bg-red-600 border border-zinc-700 hover:border-red-600 transition px-5 py-2 rounded text-sm font-bold tracking-widest"
+                    >
+                      {show.time}
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-zinc-500">
+                  No showtimes available for this movie at the moment.
+                </p>
+              )}
             </div>
           )}
         </div>
