@@ -1,581 +1,345 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 
-type Seat = {
+const ROWS = ["A", "B", "C", "D", "E", "F", "G", "H"];
+const SEATS_PER_ROW = 10;
+
+type SeatData = {
   seatId: string;
   seatLabel: string;
   row: string;
   seatNumber: string;
-  status: "available" | "booked";
   isBooked: boolean;
 };
 
-type SeatMapResponse = {
-  data: {
-    showId: string;
-    showroom: {
-      id: string;
-      name: string;
-      numberOfSeats: number;
-    };
-    layout: {
-      rows: string[];
-      seatsPerRow: number;
-    };
-    seats: Seat[];
-  };
-};
+function formatDate(d: string) {
+  try {
+    return new Date(d + "T00:00:00").toLocaleDateString("en-US", {
+      weekday: "long", year: "numeric", month: "long", day: "numeric",
+    });
+  } catch { return d; }
+}
 
-type TicketSummaryItem = {
-  type: string;
-  quantity: number;
-  pricePerTicket: number;
-  subtotal: number;
-};
-
-type CheckoutSummaryResponse = {
-  data: {
-    email: string;
-    movie: {
-      id: string;
-      title: string;
-      description: string;
-      genre: string;
-      rating: string;
-      status: string;
-      poster_url: string;
-      trailer_url: string;
-    };
-    selectedSeats: Array<{
-      seatId: string;
-      seatLabel: string;
-      row: string;
-      seatNumber: string;
-    }>;
-    show: {
-      id: string;
-      date: string;
-      time: string;
-      duration: number;
-      display: string;
-      showroom: {
-        id: string;
-        name: string;
-      };
-    };
-    ticketSummary: TicketSummaryItem[];
-    totalBeforeTax: number;
-    totalTickets: number;
-  };
-};
-
-export default function BookingPage() {
-  const searchParams = useSearchParams();
+function BookingContent() {
+  const sp     = useSearchParams();
   const router = useRouter();
 
-  const showId = searchParams.get("showId") || "";
-  const movieTitleFromQuery = searchParams.get("title") || "Selected Movie";
-  const showtimeFromQuery = searchParams.get("showtime") || "Selected Showtime";
+  const showId    = sp.get("show_id")    || "";
+  const movieId   = sp.get("movie_id")   || "";
+  const title     = sp.get("title")      || "Selected Movie";
+  const date      = sp.get("date")       || "";
+  const time      = sp.get("time")       || "";
+  const showroom  = sp.get("showroom")   || "";
+  const posterUrl = sp.get("poster_url") || "";
+  const rating    = sp.get("rating")     || "";
+  const genre     = sp.get("genre")      || "";
 
-  const [adultQty, setAdultQty] = useState(0);
-  const [childQty, setChildQty] = useState(0);
-  const [seniorQty, setSeniorQty] = useState(0);
-
-  const [seatMap, setSeatMap] = useState<SeatMapResponse["data"] | null>(null);
-  const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
-  const [checkoutSummary, setCheckoutSummary] = useState<CheckoutSummaryResponse["data"] | null>(null);
-
-  const [email, setEmail] = useState("");
-  const [pageStep, setPageStep] = useState<"booking" | "summary" | "payment">("booking");
-
-  const [loadingSeats, setLoadingSeats] = useState(false);
-  const [loadingSummary, setLoadingSummary] = useState(false);
-  const [error, setError] = useState("");
+  const [adultQty,      setAdultQty]      = useState(0);
+  const [childQty,      setChildQty]      = useState(0);
+  const [seniorQty,     setSeniorQty]     = useState(0);
+  const [seats,         setSeats]         = useState<SeatData[]>([]);
+  const [selectedSeats, setSelectedSeats] = useState<SeatData[]>([]);
+  const [seatsLoading,  setSeatsLoading]  = useState(true);
+  const [seatsError,    setSeatsError]    = useState("");
+  const [error,         setError]         = useState("");
 
   const totalTickets = adultQty + childQty + seniorQty;
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const saved = sessionStorage.getItem("pendingCheckout");
-    if (!saved) return;
-
-    try {
-      const data = JSON.parse(saved);
-
-      if (data.showId && data.showId === showId) {
-        setAdultQty(Number(data.adultQty || 0));
-        setChildQty(Number(data.childQty || 0));
-        setSeniorQty(Number(data.seniorQty || 0));
-        setSelectedSeatIds(Array.isArray(data.selectedSeatIds) ? data.selectedSeatIds : []);
+    if (!showId) { setSeatsError("No show selected."); setSeatsLoading(false); return; }
+    const load = async () => {
+      setSeatsLoading(true);
+      setSeatsError("");
+      try {
+        const res = await fetch(`/api/booking/showtimes/${showId}/seats`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        setSeats(Array.isArray(json?.data?.seats) ? json.data.seats : []);
+      } catch {
+        setSeatsError("Could not load seat map. Please try again.");
+      } finally {
+        setSeatsLoading(false);
       }
-
-      sessionStorage.removeItem("pendingCheckout");
-    } catch {
-      sessionStorage.removeItem("pendingCheckout");
-    }
+    };
+    load();
   }, [showId]);
 
   useEffect(() => {
-    if (!showId) return;
-
-    let cancelled = false;
-
-    async function loadSeatMap() {
-      try {
-        setLoadingSeats(true);
-        setError("");
-
-        const res = await fetch(`/api/booking/showtimes/${showId}/seats`, {
-          cache: "no-store",
-        });
-
-        const json = await res.json();
-
-        if (!res.ok) {
-          throw new Error(json?.message || "Failed to load seat map.");
-        }
-
-        if (!cancelled) {
-          setSeatMap(json.data);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load seat map.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingSeats(false);
-        }
-      }
+    if (selectedSeats.length > totalTickets) {
+      setSelectedSeats((prev) => prev.slice(0, totalTickets));
     }
+  }, [totalTickets]);
 
-    loadSeatMap();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [showId]);
-
-  const seatsByRow = useMemo(() => {
-    if (!seatMap) return {};
-
-    return seatMap.seats.reduce<Record<string, Seat[]>>((acc, seat) => {
-      if (!acc[seat.row]) acc[seat.row] = [];
-      acc[seat.row].push(seat);
-      acc[seat.row].sort((a, b) => Number(a.seatNumber) - Number(b.seatNumber));
-      return acc;
-    }, {});
-  }, [seatMap]);
-
-  const selectedSeatLabels = useMemo(() => {
-    if (!seatMap) return [];
-    return seatMap.seats
-      .filter((seat) => selectedSeatIds.includes(seat.seatId))
-      .map((seat) => seat.seatLabel);
-  }, [seatMap, selectedSeatIds]);
-
-  const handleSeatClick = (seat: Seat) => {
+  const handleSeatClick = (seat: SeatData) => {
     if (seat.isBooked) return;
-    if (totalTickets <= 0) {
-      setError("Please select at least one ticket.");
+    if (selectedSeats.find((s) => s.seatId === seat.seatId)) {
+      setSelectedSeats((prev) => prev.filter((s) => s.seatId !== seat.seatId));
+      setError("");
       return;
     }
-
+    if (totalTickets === 0) {
+      setError("Select the number of tickets above before choosing seats.");
+      return;
+    }
+    if (selectedSeats.length >= totalTickets) {
+      setError(`You've selected ${totalTickets} seat${totalTickets > 1 ? "s" : ""} — the maximum for your order.`);
+      return;
+    }
+    setSelectedSeats((prev) => [...prev, seat]);
     setError("");
-
-    if (selectedSeatIds.includes(seat.seatId)) {
-      setSelectedSeatIds((prev) => prev.filter((id) => id !== seat.seatId));
-      return;
-    }
-
-    if (selectedSeatIds.length >= totalTickets) {
-      setError("Selected seats must match the number of tickets.");
-      return;
-    }
-
-    setSelectedSeatIds((prev) => [...prev, seat.seatId]);
   };
 
-  useEffect(() => {
-    if (selectedSeatIds.length > totalTickets) {
-      setSelectedSeatIds((prev) => prev.slice(0, totalTickets));
-    }
-  }, [totalTickets, selectedSeatIds.length]);
-
-  const handleProceedToCheckout = async () => {
-    setError("");
-    setCheckoutSummary(null);
-
-    if (!showId) {
-      setError("Missing showId in the booking link.");
+  const handleProceed = () => {
+    if (totalTickets === 0) { setError("Please select at least one ticket."); return; }
+    if (selectedSeats.length !== totalTickets) {
+      setError(`Please select exactly ${totalTickets} seat${totalTickets > 1 ? "s" : ""} to continue.`);
       return;
     }
 
-    if (totalTickets <= 0) {
-      setError("Please select at least one ticket.");
-      return;
-    }
-
-    if (selectedSeatIds.length !== totalTickets) {
-      setError("Selected seats must match the number of tickets.");
-      return;
-    }
-
-    try {
-      setLoadingSummary(true);
-
-      const storedUser =
-        typeof window !== "undefined"
-          ? JSON.parse(localStorage.getItem("user") || "{}")
-          : {};
-
-      const currentEmail = storedUser?.email || "";
-
-      if (!currentEmail) {
-        if (typeof window !== "undefined") {
-          sessionStorage.setItem(
-            "pendingCheckout",
-            JSON.stringify({
-              showId,
-              adultQty,
-              childQty,
-              seniorQty,
-              selectedSeatIds
-            })
-          );
-        }
-
-        router.push(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`);
-        return;
-      }
-
-      const res = await fetch("/api/booking/checkout-summary", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-User-Email": currentEmail,
-        },
-        body: JSON.stringify({
-          showId,
-          selectedSeatIds,
-          ticketCounts: {
-            adult: adultQty,
-            child: childQty,
-            senior: seniorQty,
-          },
-        }),
-      });
-
-        const json = await res.json();
-
-        if (!res.ok) {
-          throw new Error(json?.message || "Failed to build checkout summary.");
-        }
-
-        setCheckoutSummary(json.data);
-        setEmail(json.data.email || currentEmail || "");
-        setPageStep("summary");
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to build checkout summary.");
-      } finally {
-        setLoadingSummary(false);
-      }
+    const bookingState = {
+      showId, movieId, title, date, time, showroom, posterUrl, rating, genre,
+      adultQty, childQty, seniorQty,
+      selectedSeatIds: selectedSeats.map((s) => s.seatId),
+      selectedSeatLabels: selectedSeats.map((s) => s.seatLabel),
     };
+    sessionStorage.setItem("pendingBooking", JSON.stringify(bookingState));
 
-    const handleContinueToPayment = async () => {
-      if (!checkoutSummary) return;
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    if (!user?.userId) {
+      router.push("/login?redirect=/checkout");
+      return;
+    }
+    router.push("/checkout");
+  };
 
-      try {
-        setLoadingSummary(true);
-        setError("");
+  // Build a lookup for quick rendering
+  const seatMap = new Map(seats.map((s) => [s.seatLabel, s]));
+  const selectedIds = new Set(selectedSeats.map((s) => s.seatId));
 
-        const storedUser =
-          typeof window !== "undefined"
-            ? JSON.parse(localStorage.getItem("user") || "{}")
-            : {};
+  const TicketCounter = (
+    label: string,
+    priceLabel: string,
+    value: number,
+    setter: (n: number) => void
+  ) => (
+    <div className="flex items-center justify-between border border-zinc-800 rounded px-4 py-3 bg-zinc-900/60">
+      <div>
+        <p className="text-sm font-bold uppercase tracking-widest text-white">{label}</p>
+        <p className="text-xs text-zinc-500 mt-0.5">{priceLabel}</p>
+      </div>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => setter(Math.max(0, value - 1))}
+          className="w-8 h-8 flex items-center justify-center rounded border border-zinc-700 text-white hover:border-red-600 hover:text-red-500 transition text-lg font-bold"
+        >
+          −
+        </button>
+        <span className="w-5 text-center text-white font-bold tabular-nums">{value}</span>
+        <button
+          onClick={() => setter(value + 1)}
+          className="w-8 h-8 flex items-center justify-center rounded border border-zinc-700 text-white hover:border-red-600 hover:text-red-500 transition text-lg font-bold"
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
 
-        const currentEmail = storedUser?.email || "";
+  return (
+    <div className="min-h-screen bg-black text-white px-4 py-12">
+      <div className="max-w-5xl mx-auto">
 
-        const res = await fetch("/api/booking/checkout-summary", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-User-Email": currentEmail,
-          },
-          body: JSON.stringify({
-            showId,
-            selectedSeatIds,
-            ticketCounts: {
-              adult: adultQty,
-              child: childQty,
-              senior: seniorQty,
-            },
-            email,
-          }),
-        });
+        <Link href="/" className="text-xs uppercase tracking-widest text-zinc-500 hover:text-white transition mb-8 inline-flex items-center gap-2">
+          ← Back to Movies
+        </Link>
 
-        const json = await res.json();
-
-        if (!res.ok) {
-          throw new Error(json?.message || "Failed to confirm checkout summary.");
-        }
-
-        setCheckoutSummary(json.data);
-        setEmail(json.data.email || email);
-        setPageStep("payment");
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to continue to payment.");
-      } finally {
-        setLoadingSummary(false);
-      }
-    };
-
-    if (!showId) {
-      return (
-        <div className="min-h-screen bg-gray-100 py-12 px-4 text-black">
-          <div className="p-6 bg-white rounded-lg shadow-lg max-w-3xl mx-auto">
-            <h1 className="text-2xl font-bold mb-4">Booking Page</h1>
-            <p className="text-red-600">
-              Missing showId in URL. Open this page from a showtime selection link.
-            </p>
+        <div className="flex flex-col sm:flex-row gap-6 mb-10 mt-4">
+          {posterUrl && (
+            <img src={posterUrl} alt={title} className="w-20 h-28 object-cover rounded border border-zinc-800 flex-shrink-0" />
+          )}
+          <div>
+            <h1 className="font-diplomata text-3xl md:text-4xl uppercase tracking-wide mb-1">{title}</h1>
+            <div className="flex flex-wrap gap-3 text-xs uppercase tracking-widest text-zinc-400 mt-1">
+              {rating && <span className="text-red-500 font-bold">{rating}</span>}
+              {genre  && <span>{genre}</span>}
+            </div>
+            {date && (
+              <p className="text-sm text-zinc-300 mt-3">
+                {formatDate(date)}&nbsp;&nbsp;·&nbsp;&nbsp;
+                <span className="text-white font-bold">{time}</span>
+              </p>
+            )}
+            {showroom && <p className="text-xs text-zinc-500 uppercase tracking-widest mt-1">{showroom}</p>}
           </div>
         </div>
-      );
-    }
 
-    return (
-      <div className="min-h-screen bg-gray-100 py-12 px-4 text-black">
-        <div className="p-6 bg-white rounded-lg shadow-lg max-w-4xl mx-auto">
-          <h1 className="text-2xl font-bold text-center mb-6">Booking Page</h1>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
 
-          {error && (
-            <div className="mb-4 rounded border border-red-300 bg-red-50 px-4 py-3 text-red-700">
-              {error}
+          <div className="lg:col-span-2 space-y-10">
+
+            <div>
+              <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-4">Ticket Quantities</h2>
+              <div className="space-y-3">
+                {TicketCounter("Adult",  "Price loaded at checkout", adultQty,  setAdultQty)}
+                {TicketCounter("Child",  "Price loaded at checkout", childQty,  setChildQty)}
+                {TicketCounter("Senior", "Price loaded at checkout", seniorQty, setSeniorQty)}
+              </div>
+              {totalTickets > 0 && (
+                <p className="text-xs text-zinc-500 mt-3 uppercase tracking-widest">
+                  {selectedSeats.length} of {totalTickets} seat{totalTickets > 1 ? "s" : ""} selected
+                </p>
+              )}
             </div>
-          )}
 
-          {pageStep === "booking" && (
-            <>
-              <div className="mb-6 bg-gray-50 p-4 rounded-lg">
-                <p>
-                  <strong>Movie:</strong> {movieTitleFromQuery}
-                </p>
-                <p>
-                  <strong>Showtime:</strong> {showtimeFromQuery}
-                </p>
-                {seatMap?.showroom?.name && (
-                  <p>
-                    <strong>Showroom:</strong> {seatMap.showroom.name}
-                  </p>
-                )}
+            <div>
+              <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-6">Select Your Seats</h2>
+
+              <div className="mb-8 text-center">
+                <div className="h-1.5 bg-gradient-to-r from-transparent via-zinc-500 to-transparent rounded-full w-3/4 mx-auto" />
+                <p className="text-[10px] uppercase tracking-[0.4em] text-zinc-600 mt-2">Screen</p>
               </div>
 
-              <div className="mb-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block font-medium mb-1">Adult Tickets</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={adultQty}
-                    onChange={(e) => setAdultQty(parseInt(e.target.value) || 0)}
-                    className="w-full border p-2 rounded"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-medium mb-1">Child Tickets</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={childQty}
-                    onChange={(e) => setChildQty(parseInt(e.target.value) || 0)}
-                    className="w-full border p-2 rounded"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-medium mb-1">Senior Tickets</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={seniorQty}
-                    onChange={(e) => setSeniorQty(parseInt(e.target.value) || 0)}
-                    className="w-full border p-2 rounded"
-                  />
-                </div>
-              </div>
-
-              <div className="relative mb-10">
-                <div className="h-8 bg-gray-300 rounded-t-lg w-3/4 mx-auto mb-6 flex items-center justify-center">
-                  <span className="text-gray-600 text-sm font-medium">SCREEN</span>
-                </div>
-              </div>
-
-              {loadingSeats ? (
-                <p className="text-center mb-8">Loading seat map...</p>
-              ) : (
-                <div className="mb-8">
-                  {seatMap?.layout?.rows?.map((row) => (
-                    <div key={row} className="flex justify-center mb-2">
-                      <div className="w-6 flex items-center justify-center font-bold text-black">
-                        {row}
-                      </div>
-                      <div className="flex space-x-2">
-                        {(seatsByRow[row] || []).map((seat) => {
-                          const isSelected = selectedSeatIds.includes(seat.seatId);
-
-                          return (
-                            <button
-                              key={seat.seatId}
-                              disabled={seat.isBooked}
-                              onClick={() => handleSeatClick(seat)}
-                              className={`w-10 h-10 rounded text-sm ${isSelected
-                                ? "bg-blue-600 text-white"
-                                : seat.isBooked
-                                  ? "bg-gray-500 text-gray-200 cursor-not-allowed"
-                                  : "bg-gray-200 hover:bg-gray-300"
-                                }`}
-                              title={seat.seatLabel}
-                            >
-                              {seat.seatNumber}
-                            </button>
-                          );
-                        })}
-                      </div>
+              {seatsLoading && (
+                <div className="space-y-2">
+                  {[1,2,3,4,5].map((i) => (
+                    <div key={i} className="flex justify-center gap-1.5">
+                      {Array.from({length: 10}).map((_, j) => (
+                        <div key={j} className="w-7 h-7 bg-zinc-800 animate-pulse rounded-t-md" />
+                      ))}
                     </div>
                   ))}
                 </div>
               )}
 
-              <div className="border-t pt-6">
-                <p>
-                  <strong>Selected Seats:</strong>{" "}
-                  {selectedSeatLabels.length > 0 ? selectedSeatLabels.join(", ") : "None"}
-                </p>
-                <p className="mt-2">
-                  <strong>Total Tickets:</strong> {totalTickets}
-                </p>
+              {seatsError && (
+                <p className="text-xs text-red-400 uppercase tracking-widest text-center">{seatsError}</p>
+              )}
 
-                <button
-                  className="mt-4 w-full bg-blue-600 text-white py-3 rounded disabled:bg-gray-400"
-                  disabled={loadingSummary || loadingSeats || selectedSeatIds.length === 0}
-                  onClick={handleProceedToCheckout}
-                >
-                  {loadingSummary ? "Loading Summary..." : "Proceed to Checkout"}
-                </button>
-              </div>
-            </>
-          )}
-
-          {pageStep === "summary" && checkoutSummary && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-bold">Order Summary</h2>
-
-              <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                <p>
-                  <strong>Movie:</strong> {checkoutSummary.movie.title}
-                </p>
-                <p>
-                  <strong>Showtime:</strong> {checkoutSummary.show.display}
-                </p>
-                <p>
-                  <strong>Selected Seats:</strong>{" "}
-                  {checkoutSummary.selectedSeats.map((seat) => seat.seatLabel).join(", ")}
-                </p>
-                <p>
-                  <strong>Total Tickets:</strong> {checkoutSummary.totalTickets}
-                </p>
-              </div>
-
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-semibold mb-3">Ticket Breakdown</h3>
-                <div className="space-y-2">
-                  {checkoutSummary.ticketSummary.map((item) => (
-                    <div
-                      key={item.type}
-                      className="flex items-center justify-between border-b pb-2"
-                    >
-                      <span>
-                        {item.type} x {item.quantity}
-                      </span>
-                      <span>
-                        ${item.pricePerTicket.toFixed(2)} each — ${item.subtotal.toFixed(2)}
-                      </span>
-                    </div>
-                  ))}
+              {!seatsLoading && !seatsError && (
+                <div className="space-y-2 overflow-x-auto pb-2">
+                  {ROWS.map((row) => {
+                    const rowSeats = Array.from({length: SEATS_PER_ROW}, (_, i) => {
+                      const label = `${row}${i + 1}`;
+                      return seatMap.get(label) ?? null;
+                    });
+                    const hasAny = rowSeats.some(Boolean);
+                    if (!hasAny) return null;
+                    return (
+                      <div key={row} className="flex items-center gap-2 justify-center min-w-max mx-auto">
+                        <span className="w-5 text-xs text-zinc-600 font-bold text-right">{row}</span>
+                        <div className="flex gap-1.5">
+                          {rowSeats.map((seat, i) => {
+                            if (!seat) {
+                              return <div key={i} className="w-7 h-7" />;
+                            }
+                            const isSelected = selectedIds.has(seat.seatId);
+                            return (
+                              <button
+                                key={seat.seatId}
+                                disabled={seat.isBooked}
+                                onClick={() => handleSeatClick(seat)}
+                                title={seat.seatLabel}
+                                className={[
+                                  "w-7 h-7 rounded-t-md text-[10px] font-bold border transition-all duration-150 flex items-center justify-center",
+                                  seat.isBooked
+                                    ? "bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed"
+                                    : isSelected
+                                    ? "bg-red-600 border-red-500 text-white scale-110 shadow-lg shadow-red-900/40"
+                                    : "bg-zinc-900 border-zinc-700 text-zinc-500 hover:border-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer",
+                                ].join(" ")}
+                              >
+                                {i + 1}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <span className="w-5 text-xs text-zinc-600 font-bold">{row}</span>
+                      </div>
+                    );
+                  })}
                 </div>
+              )}
 
-                <p className="mt-4 text-lg font-bold">
-                  Total Before Tax: ${checkoutSummary.totalBeforeTax.toFixed(2)}
-                </p>
-              </div>
-
-              <div>
-                <label className="block font-medium mb-1">Email for Confirmation</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full border p-2 rounded"
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  className="flex-1 bg-gray-200 py-3 rounded"
-                  onClick={() => setPageStep("booking")}
-                >
-                  Back
-                </button>
-                <button
-                  className="flex-1 bg-blue-600 text-white py-3 rounded disabled:bg-gray-400"
-                  onClick={handleContinueToPayment}
-                  disabled={loadingSummary || !email.trim()}
-                >
-                  {loadingSummary ? "Continuing..." : "Continue to Payment"}
-                </button>
+              <div className="flex gap-6 justify-center mt-6">
+                {[
+                  { color: "bg-zinc-900 border-zinc-700", label: "Available" },
+                  { color: "bg-red-600 border-red-500",   label: "Selected"  },
+                  { color: "bg-zinc-800 border-zinc-700", label: "Booked"    },
+                ].map(({ color, label }) => (
+                  <div key={label} className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-zinc-500">
+                    <div className={`w-4 h-4 rounded-t-sm border ${color}`} />
+                    {label}
+                  </div>
+                ))}
               </div>
             </div>
-          )}
+          </div>
 
-          {pageStep === "payment" && checkoutSummary && (
-            <div className="space-y-6 text-center">
-              <h2 className="text-2xl font-bold">Payment Processing Page</h2>
-              <p className="text-gray-700">
-                This is a mock payment page for Deliverable 6.
-              </p>
+          <div className="lg:col-span-1">
+            <div className="sticky top-24 border border-zinc-800 rounded bg-zinc-950 p-6 space-y-5">
+              <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-400 border-b border-zinc-800 pb-4">
+                Order Summary
+              </h2>
 
-              <div className="bg-gray-50 p-4 rounded-lg text-left space-y-2">
-                <p>
-                  <strong>Movie:</strong> {checkoutSummary.movie.title}
-                </p>
-                <p>
-                  <strong>Showtime:</strong> {checkoutSummary.show.display}
-                </p>
-                <p>
-                  <strong>Seats:</strong>{" "}
-                  {checkoutSummary.selectedSeats.map((seat) => seat.seatLabel).join(", ")}
-                </p>
-                <p>
-                  <strong>Email:</strong> {email}
-                </p>
-                <p>
-                  <strong>Total Before Tax:</strong> ${checkoutSummary.totalBeforeTax.toFixed(2)}
+              <div className="space-y-2 text-sm">
+                {adultQty  > 0 && <div className="flex justify-between text-zinc-300"><span>Adult × {adultQty}</span></div>}
+                {childQty  > 0 && <div className="flex justify-between text-zinc-300"><span>Child × {childQty}</span></div>}
+                {seniorQty > 0 && <div className="flex justify-between text-zinc-300"><span>Senior × {seniorQty}</span></div>}
+                {totalTickets === 0 && <p className="text-xs text-zinc-600 uppercase tracking-widest">No tickets selected</p>}
+              </div>
+
+              {selectedSeats.length > 0 && (
+                <div className="border-t border-zinc-800 pt-4">
+                  <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Seats</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedSeats.map((s) => (
+                      <span key={s.seatId} className="text-xs bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded text-white font-bold">
+                        {s.seatLabel}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t border-zinc-800 pt-4">
+                <p className="text-xs text-zinc-600 uppercase tracking-widest">
+                  Prices confirmed at checkout
                 </p>
               </div>
+
+              {error && (
+                <p className="text-xs text-red-400 uppercase tracking-widest border border-red-900/60 bg-red-950/20 rounded px-3 py-2">
+                  {error}
+                </p>
+              )}
 
               <button
-                className="w-full bg-gray-200 py-3 rounded"
-                onClick={() => setPageStep("summary")}
+                onClick={handleProceed}
+                disabled={selectedSeats.length === 0 || selectedSeats.length !== totalTickets}
+                className="w-full border border-white hover:bg-white hover:text-black transition py-3 text-xs font-bold uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-white"
               >
-                Back to Summary
+                Proceed to Checkout
               </button>
             </div>
-          )}
+          </div>
+
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
+
+export default function BookingPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <p className="text-zinc-500 uppercase tracking-widest text-xs animate-pulse">Loading...</p>
+      </div>
+    }>
+      <BookingContent />
+    </Suspense>
+  );
+}
