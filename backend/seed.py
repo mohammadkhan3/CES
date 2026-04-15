@@ -261,10 +261,16 @@ showroom2 = db["showrooms"].insert_one({
     "name": "Screen 2",
     "numberOfSeats": 48,
 })
-print(f"Seeded 1 theatre & 2 showrooms")
+showroom3 = db["showrooms"].insert_one({
+    "theatreId": theatre_id,
+    "name": "Screen 3",
+    "numberOfSeats": 30,
+})
+print(f"Seeded 1 theatre & 3 showrooms")
 
 seat_ids_1 = []
 seat_ids_2 = []
+seat_ids_3 = []
 rows = ["A", "B", "C", "D", "E", "F"]
 seats_per_row = 8
 for row in rows:
@@ -281,30 +287,66 @@ for row in rows:
             "row": row,
         })
         seat_ids_2.append(seat.inserted_id)
-print(f"Seeded {len(seat_ids_1) + len(seat_ids_2)} seats")
 
-# Seed shows
+# Screen 3 is smaller: 5 rows x 6 seats = 30 seats
+rows_3 = ["A", "B", "C", "D", "E"]
+seats_per_row_3 = 6
+for row in rows_3:
+    for num in range(1, seats_per_row_3 + 1):
+        seat = db["seats"].insert_one({
+            "showroomId": showroom3.inserted_id,
+            "seatNumber": str(num),
+            "row": row,
+        })
+        seat_ids_3.append(seat.inserted_id)
+print(f"Seeded {len(seat_ids_1) + len(seat_ids_2) + len(seat_ids_3)} seats")
+
+# Seed shows — future dates, all 3 showrooms covered for demo
 shows = db["shows"].insert_many([
+    # Screen 1 — Sinners (2 showtimes, different times = no conflict)
     {
         "movieId": movie_ids[0],
         "showroomId": showroom1.inserted_id,
-        "date": "2026-03-25",
+        "date": "2026-04-25",
         "time": "2:00 PM",
         "duration": 137,
     },
     {
         "movieId": movie_ids[0],
         "showroomId": showroom1.inserted_id,
-        "date": "2026-03-25",
-        "time": "5:00 PM",
+        "date": "2026-04-25",
+        "time": "6:00 PM",
         "duration": 137,
+    },
+    # Screen 2 — F1: The Movie
+    {
+        "movieId": movie_ids[1],
+        "showroomId": showroom2.inserted_id,
+        "date": "2026-04-25",
+        "time": "3:00 PM",
+        "duration": 155,
     },
     {
         "movieId": movie_ids[1],
         "showroomId": showroom2.inserted_id,
-        "date": "2026-03-25",
-        "time": "8:00 PM",
+        "date": "2026-04-25",
+        "time": "7:00 PM",
         "duration": 155,
+    },
+    # Screen 3 — How to Train Your Dragon (smaller room)
+    {
+        "movieId": movie_ids[2],
+        "showroomId": showroom3.inserted_id,
+        "date": "2026-04-25",
+        "time": "1:00 PM",
+        "duration": 110,
+    },
+    {
+        "movieId": movie_ids[2],
+        "showroomId": showroom3.inserted_id,
+        "date": "2026-04-25",
+        "time": "5:00 PM",
+        "duration": 110,
     },
 ])
 show_ids = shows.inserted_ids
