@@ -6,6 +6,25 @@ from app.utils import movie_to_json
 
 movies_bp = Blueprint("movies", __name__)
 
+
+# Admin: flat list of all movies for the scheduling dropdown
+# The admin showtimes page calls GET /api/movies and accesses m._id + m.title
+@movies_bp.get("/movies")
+def list_all_movies():
+    movies = get_movies_collection()
+    cursor = movies.find({}, {"title": 1, "status": 1})
+    result = [
+        {
+            "_id":    str(doc["_id"]),
+            "id":     str(doc["_id"]),
+            "title":  doc.get("title", ""),
+            "status": doc.get("status", ""),
+        }
+        for doc in cursor
+    ]
+    return jsonify(result), 200
+
+
 # 2.1 Home Page Function
 @movies_bp.get("/movies/homepage")
 def get_homepage():

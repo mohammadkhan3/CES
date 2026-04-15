@@ -4,6 +4,7 @@ from flask import Flask
 from dotenv import load_dotenv
 from flask_cors import CORS
 
+from app.routes.admin import admin_bp
 from app.routes.auth import auth_bp
 from app.routes.booking import booking_bp
 from app.routes.movies import movies_bp
@@ -25,4 +26,5 @@ def create_app():
     app.register_blueprint(auth_bp, url_prefix="/api")
     app.register_blueprint(profile_bp, url_prefix="/api")
     app.register_blueprint(booking_bp, url_prefix="/api")
+    app.register_blueprint(admin_bp, url_prefix="/api")
     return app
