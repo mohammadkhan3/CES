@@ -2,16 +2,21 @@ import { NextResponse } from "next/server";
 
 const BACKEND_BASE = process.env.BACKEND_BASE_URL ?? "http://localhost:5000";
 
-export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ movie_id: string }> }
-) {
+type RouteParams = {
+  params: Promise<{
+    movie_id: string;
+  }>;
+};
+
+export async function GET(_: Request, { params }: RouteParams) {
   const { movie_id } = await params;
 
-  const upstream = await fetch(`${BACKEND_BASE}/api/movies/${movie_id}/showtimes`, {
-    method: "GET",
-    cache: "no-store",
-  });
+  const upstream = await fetch(
+    `${BACKEND_BASE}/api/movies/${encodeURIComponent(movie_id)}/showtimes`,
+    {
+      cache: "no-store",
+    }
+  );
 
   const text = await upstream.text();
 
