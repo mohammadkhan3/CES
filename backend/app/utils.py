@@ -2,6 +2,9 @@ def movie_to_json(doc):
     return {
         "id": str(doc["_id"]),
         "title": doc.get("title", ""),
+        "cast": doc.get("cast", ""),
+        "director": doc.get("director", ""),
+        "producer": doc.get("producer", ""),
         "genre": doc.get("genre", ""),
         "status": doc.get("status", ""),
         "description": doc.get("description", ""),

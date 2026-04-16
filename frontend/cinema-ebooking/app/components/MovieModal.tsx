@@ -12,6 +12,9 @@ type Movie = {
   rating?: string;
   poster_url?: string;
   trailer_url?: string;
+  cast?: string;
+  director?: string;
+  producer?: string;
 };
 
 type Showtime = {
@@ -128,6 +131,7 @@ export default function MovieModal({
           &times;
         </button>
 
+        {/* Poster */}
         <div className="w-full md:w-1/3 bg-zinc-900 border-r border-zinc-800 flex-shrink-0">
           {movie.poster_url ? (
             <img src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover" />
@@ -138,13 +142,36 @@ export default function MovieModal({
           )}
         </div>
 
+        {/* Content */}
         <div className="p-8 md:w-2/3 flex flex-col text-white">
           <h2 className="text-3xl font-diplomata uppercase tracking-wider mb-2">{movie.title}</h2>
 
-          <div className="flex gap-3 text-xs text-red-500 mb-6 uppercase tracking-widest font-bold">
+          <div className="flex gap-3 text-xs text-red-500 mb-4 uppercase tracking-widest font-bold">
             <span>{movie.rating || "PG-13"}</span>
             <span>|</span>
             <span className="text-zinc-400">{movie.genre || "Action"}</span>
+          </div>
+
+          {/* Cast / Director / Producer */}
+          <div className="mb-5 space-y-1.5">
+            {movie.director && (
+              <p className="text-xs text-zinc-400">
+                <span className="uppercase tracking-widest text-zinc-600 mr-2">Director</span>
+                {movie.director}
+              </p>
+            )}
+            {movie.producer && (
+              <p className="text-xs text-zinc-400">
+                <span className="uppercase tracking-widest text-zinc-600 mr-2">Producer</span>
+                {movie.producer}
+              </p>
+            )}
+            {movie.cast && (
+              <p className="text-xs text-zinc-400">
+                <span className="uppercase tracking-widest text-zinc-600 mr-2">Cast</span>
+                {movie.cast}
+              </p>
+            )}
           </div>
 
           <div className="mb-6 flex flex-wrap gap-3 items-center">
