@@ -1,4 +1,5 @@
 import re
+from datetime import datetime
 
 from bson import ObjectId
 from flask import Blueprint, jsonify, request, session
@@ -14,18 +15,14 @@ from app.services.email import send_promotion_email
 
 admin_bp = Blueprint("admin", __name__)
 
-_VALID_RATINGS = {"G", "PG", "PG-13", "R", "NC-17"}
+_VALID_RATINGS  = {"G", "PG", "PG-13", "R", "NC-17"}
 _VALID_STATUSES = {"currently_running", "coming_soon"}
 
 
-def _require_admin():
-    """
-    Returns a 403 error tuple if the caller is not an admin, else None.
+# ── Auth helper ───────────────────────────────────────────────────────────────
 
-    Checks in order:
-      1. Flask session (set on login)
-      2. X-User-Email header fallback (consistent with booking.py pattern)
-    """
+def _require_admin():
+    """Return a 403 tuple if the caller is not an admin, else None."""
     if session.get("role") == "admin":
         return None
 
@@ -40,15 +37,61 @@ def _require_admin():
     return jsonify({"message": "Admin access required."}), 403
 
 
-# ── Movies ─────────────────────────────────────────────────────────────────
+# ── Scheduling conflict helper ────────────────────────────────────────────────
+
+def _parse_minutes(time_str: str):
+    """
+    Convert a time string like '2:00 PM' or '14:00' to minutes from midnight.
+    Returns None if parsing fails.
+    """
+    for fmt in ("%I:%M %p", "%H:%M"):
+        try:
+            t = datetime.strptime(time_str.strip(), fmt)
+            return t.hour * 60 + t.minute
+        except ValueError:
+            continue
+    return None
+
+
+def _find_overlap(showroom_id: ObjectId, date: str, time_str: str, duration: int):
+    """
+    Return a conflicting show doc if the proposed show overlaps any existing
+    show in the same showroom on the same date; otherwise return None.
+
+    Overlap condition: [new_start, new_end) intersects [exist_start, exist_end)
+    i.e.  new_start < exist_end  AND  exist_start < new_end
+    """
+    new_start = _parse_minutes(time_str)
+    if new_start is None:
+        # Can't parse time — fall back to exact-match check only
+        return get_shows_collection().find_one({
+            "showroomId": showroom_id,
+            "date":       date,
+            "time":       time_str,
+        })
+
+    new_end = new_start + duration
+
+    for show in get_shows_collection().find({"showroomId": showroom_id, "date": date}):
+        exist_start = _parse_minutes(str(show.get("time", "")))
+        if exist_start is None:
+            continue
+        exist_end = exist_start + int(show.get("duration", 120))
+
+        if new_start < exist_end and exist_start < new_end:
+            return show
+
+    return None
+
+
+# ── Movies ────────────────────────────────────────────────────────────────────
 
 @admin_bp.post("/admin/movies")
 def admin_create_movie():
     """
-    Create a new movie in the database.
-
-    Required fields: title, rating, genre, description, trailerLink, posterUrl
-    Optional fields: status (defaults to 'currently_running'), cast, director, producer, releaseDate
+    Create a new movie.
+    Required: title, rating, genre, description, trailerLink, posterUrl
+    Optional: status (default: currently_running), cast, director, producer, releaseDate
     Returns 409 if a movie with the same title already exists.
     """
     err = _require_admin()
@@ -67,19 +110,19 @@ def admin_create_movie():
 
     errors = {}
     if not title:
-        errors["title"] = "Title is required."
+        errors["title"]       = "Title is required."
     if not rating or rating not in _VALID_RATINGS:
-        errors["rating"] = f"Rating must be one of: {', '.join(sorted(_VALID_RATINGS))}."
+        errors["rating"]      = f"Rating must be one of: {', '.join(sorted(_VALID_RATINGS))}."
     if not genre:
-        errors["genre"] = "Genre is required."
+        errors["genre"]       = "Genre is required."
     if not description:
         errors["description"] = "Description is required."
     if not trailer_url:
         errors["trailerLink"] = "Trailer link is required."
     if not poster_url:
-        errors["posterUrl"] = "Poster URL is required."
+        errors["posterUrl"]   = "Poster URL is required."
     if status not in _VALID_STATUSES:
-        errors["status"] = f"Status must be one of: {', '.join(_VALID_STATUSES)}."
+        errors["status"]      = f"Status must be one of: {', '.join(_VALID_STATUSES)}."
 
     if errors:
         return jsonify({"message": "Validation failed.", "errors": errors}), 400
@@ -104,48 +147,45 @@ def admin_create_movie():
         "synopsis":    description,
         "releaseDate": (payload.get("releaseDate") or "").strip(),
     }
-
     result = movies.insert_one(movie_doc)
 
     return jsonify({
         "message": "Movie created successfully.",
-        "data": {"id": str(result.inserted_id), "title": title},
+        "data":    {"id": str(result.inserted_id), "title": title},
     }), 201
 
 
-# ── Showrooms ───────────────────────────────────────────────────────────────
+# ── Showrooms ─────────────────────────────────────────────────────────────────
 
 @admin_bp.get("/admin/showrooms")
 def admin_list_showrooms():
-    """
-    Return all showrooms so the admin scheduling form can build a real dropdown
-    with actual MongoDB ObjectIds instead of hardcoded placeholders.
-    """
+    """Return all showrooms for the admin scheduling dropdown."""
     err = _require_admin()
     if err:
         return err
 
-    cursor = get_showrooms_collection().find({})
     result = [
         {
             "id":            str(doc["_id"]),
             "name":          doc.get("name", ""),
             "numberOfSeats": doc.get("numberOfSeats", 0),
         }
-        for doc in cursor
+        for doc in get_showrooms_collection().find({})
     ]
     return jsonify({"data": result}), 200
 
 
-# ── Showtimes ───────────────────────────────────────────────────────────────
+# ── Showtimes ─────────────────────────────────────────────────────────────────
 
 @admin_bp.post("/admin/showtimes")
 def admin_create_showtime():
     """
     Schedule a showtime for a movie in a showroom.
 
-    Conflict rule: a showroom cannot have two shows at the exact same date + time.
-    Returns 409 with a descriptive message if a conflict is detected.
+    Conflict rule: a showroom cannot have two overlapping shows on the same date.
+    Overlap is computed using duration so that, e.g., a 2-hour show starting at
+    2:00 PM blocks the same room until 4:00 PM (a 3:00 PM show would be rejected).
+    Returns 409 with a descriptive message when a conflict is detected.
     """
     err = _require_admin()
     if err:
@@ -188,47 +228,42 @@ def admin_create_showtime():
     if not get_showrooms_collection().find_one({"_id": showroom_id}):
         return jsonify({"message": "Showroom not found."}), 404
 
-    # Conflict check: same showroom, same date, same time
-    conflict = get_shows_collection().find_one({
-        "showroomId": showroom_id,
-        "date":       date,
-        "time":       time_str,
-    })
-    if conflict:
-        return jsonify({
-            "message": f"Conflict: this showroom is already booked on {date} at {time_str}."
-        }), 409
-
     try:
         duration = int(duration_raw) if duration_raw is not None else 120
     except (TypeError, ValueError):
         duration = 120
 
-    show_doc = {
+    conflict = _find_overlap(showroom_id, date, time_str, duration)
+    if conflict:
+        conflict_time = conflict.get("time", "unknown time")
+        return jsonify({
+            "message": (
+                f"Scheduling conflict: this showroom already has a show at {conflict_time} on {date} "
+                f"that overlaps the requested {time_str} slot."
+            )
+        }), 409
+
+    result = get_shows_collection().insert_one({
         "movieId":    movie_id,
         "showroomId": showroom_id,
         "date":       date,
         "time":       time_str,
         "duration":   duration,
-    }
-
-    result = get_shows_collection().insert_one(show_doc)
+    })
 
     return jsonify({
         "message": "Showtime scheduled successfully.",
-        "data": {"id": str(result.inserted_id)},
+        "data":    {"id": str(result.inserted_id)},
     }), 201
 
 
-# ── Promotions ──────────────────────────────────────────────────────────────
+# ── Promotions ────────────────────────────────────────────────────────────────
 
 @admin_bp.post("/admin/promotions")
 def admin_create_promotion():
     """
     Create a promo code and optionally email all active customers.
-
-    Discount is stored as a decimal (e.g. 25% -> 0.25) to match the existing
-    promotions collection schema used by the booking checkout.
+    Discount is stored as a decimal fraction (25% → 0.25).
     Returns 409 if the promo code already exists.
     """
     err = _require_admin()
@@ -237,9 +272,9 @@ def admin_create_promotion():
 
     payload = request.get_json(silent=True) or {}
 
-    promo_code      = (payload.get("code") or "").strip().upper()
+    promo_code      = (payload.get("code")            or "").strip().upper()
     discount_raw    = payload.get("discountPercentage")
-    expiration_date = (payload.get("expirationDate") or "").strip()
+    expiration_date = (payload.get("expirationDate")  or "").strip()
     send_email_flag = bool(payload.get("sendEmail", False))
 
     errors = {}
@@ -266,32 +301,25 @@ def admin_create_promotion():
     if promos.find_one({"promoCode": promo_code}):
         return jsonify({"message": f"Promo code '{promo_code}' already exists."}), 409
 
-    promo_doc = {
+    result = promos.insert_one({
         "promoCode": promo_code,
         "discount":  round(discount_pct / 100, 4),
         "startDate": "",
         "endDate":   expiration_date,
-    }
-    result = promos.insert_one(promo_doc)
+    })
 
     email_count = 0
     if send_email_flag:
-        subscribed = list(
-            get_users_collection().find(
-                {"role": "customer", "status": "ACTIVE"},
-                {"email": 1},
-            )
-        )
-        for user_doc in subscribed:
+        for user_doc in get_users_collection().find(
+            {"role": "customer", "status": "ACTIVE"}, {"email": 1}
+        ):
             email_addr = (user_doc.get("email") or "").strip()
             if email_addr:
                 try:
-                    send_promotion_email(
-                        email_addr, promo_code, discount_pct, expiration_date
-                    )
+                    send_promotion_email(email_addr, promo_code, discount_pct, expiration_date)
                     email_count += 1
                 except Exception:
-                    pass  # don't abort the whole request if one email fails
+                    pass
 
     return jsonify({
         "message": "Promotion created successfully.",

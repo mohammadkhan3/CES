@@ -12,21 +12,26 @@ def movie_to_json(doc):
 
 
 def showtime_to_json(show_doc, showroom_doc=None):
-    """Normalize a showtime document to the API contract shape."""
+    """Normalize a showtime document to the API contract shape.
+
+    Returns the nested ``showroom: {id, name}`` structure and a ``display``
+    string that the frontend MovieModal component expects.
+    """
+    showroom_id   = str(show_doc.get("showroomId", ""))
+    showroom_name = (showroom_doc or {}).get("name", "")
+    date          = show_doc.get("date", "")
+    time          = show_doc.get("time", "")
+    display       = f"{date} {time} – {showroom_name}".strip() if showroom_name else f"{date} {time}".strip()
+
     return {
-        "id": str(show_doc["_id"]),
+        "id":       str(show_doc["_id"]),
         "movie_id": str(show_doc.get("movieId", "")),
-        "showroom_id": str(show_doc.get("showroomId", "")),
-        "showroom_name": (showroom_doc or {}).get("name", ""),
-        "date": show_doc.get("date", ""),
-        "time": show_doc.get("time", ""),
+        "date":     date,
+        "time":     time,
         "duration": show_doc.get("duration", 0),
-    }
-
-
-def showtimes_response_to_json(movie_doc, showtimes):
-    """Build a predictable response envelope for movie showtimes."""
-    return {
-        "movie": movie_to_json(movie_doc),
-        "showtimes": showtimes,
+        "showroom": {
+            "id":   showroom_id,
+            "name": showroom_name,
+        },
+        "display": display,
     }

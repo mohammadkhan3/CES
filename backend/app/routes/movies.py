@@ -2,7 +2,7 @@ import re
 from flask import Blueprint, request, jsonify
 from bson import ObjectId
 from app.db import get_movies_collection, get_shows_collection, get_showrooms_collection
-from app.utils import movie_to_json, showtime_to_json, showtimes_response_to_json
+from app.utils import movie_to_json, showtime_to_json
 
 movies_bp = Blueprint("movies", __name__)
 
@@ -87,7 +87,8 @@ def get_movie_showtimes(movie_id: str):
 
     showtime_list.sort(key=lambda item: (item.get("date", ""), item.get("time", "")))
 
-    return jsonify({"data": showtimes_response_to_json(movie_doc, showtime_list)}), 200
+    # Return array directly so frontend can do Array.isArray(json.data)
+    return jsonify({"data": showtime_list}), 200
 
 
 # 2.3 Search title function
