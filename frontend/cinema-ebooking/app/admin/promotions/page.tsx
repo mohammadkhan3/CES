@@ -42,22 +42,30 @@ export default function ManagePromotionsPage() {
     setMessage(promo.sendEmail ? "Saving promotion and preparing emails..." : "Saving promotion...");
 
     try {
-      setTimeout(() => {
-        setIsError(false);
-        setMessage(promo.sendEmail 
-          ? "Promotion active! Emails dispatched to subscribed users." 
-          : "Promotion active! Saved silently without email blast."
-        );
-        
-        setPromo({
-          code: "",
-          discountPercentage: "",
-          expirationDate: "",
-          sendEmail: false
-        });
-        
-        setTimeout(() => setMessage(""), 4000);
-      }, 1000);
+      const res = await fetch("http://localhost:5000/api/promotions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(promo),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to save promotion to the backend.");
+      }
+
+      setIsError(false);
+      setMessage(promo.sendEmail 
+        ? "Promotion active! Emails dispatched to subscribed users." 
+        : "Promotion active! Saved silently without email blast."
+      );
+      
+      setPromo({
+        code: "",
+        discountPercentage: "",
+        expirationDate: "",
+        sendEmail: false
+      });
+      
+      setTimeout(() => setMessage(""), 4000);
 
     } catch (error) {
       setIsError(true);

@@ -38,20 +38,28 @@ export default function ManageMoviesPage() {
     setMessage("Saving movie to database...");
 
     try {
-      setTimeout(() => {
-        setMessage("Movie successfully added to the system!");
-        
-        setMovie({
-          title: "",
-          rating: "",
-          genre: "",
-          description: "",
-          trailerLink: "",
-          posterUrl: ""
-        });
-        
-        setTimeout(() => setMessage(""), 3000);
-      }, 800);
+      const res = await fetch("http://localhost:5000/api/movies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(movie),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to save movie to the backend.");
+      }
+
+      setMessage("Movie successfully added to the system!");
+      
+      setMovie({
+        title: "",
+        rating: "",
+        genre: "",
+        description: "",
+        trailerLink: "",
+        posterUrl: ""
+      });
+      
+      setTimeout(() => setMessage(""), 3000);
 
     } catch (error) {
       setIsError(true);
