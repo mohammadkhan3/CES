@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Set
 
 from bson import ObjectId
@@ -6,6 +7,7 @@ from flask import Blueprint, jsonify, request, session
 from app.db import (
     get_bookings_collection,
     get_movies_collection,
+    get_seat_reservations_collection,
     get_seats_collection,
     get_shows_collection,
     get_showrooms_collection,
@@ -44,19 +46,30 @@ def _build_display(show_doc: Dict, showroom_doc: Dict) -> str:
     return f"{date} {time} – {room}".strip()
 
 
-def _get_booked_seat_ids(show_id: ObjectId) -> Set[ObjectId]:
-    """Return the set of seat ObjectIds already booked for a show."""
+def _get_booked_seat_ids(show_id: ObjectId, exclude_email: str = "") -> Set[ObjectId]:
+    """Return seat ObjectIds already confirmed-booked or actively reserved by other users."""
+    # Confirmed bookings
     bookings = list(get_bookings_collection().find({"showId": show_id}, {"_id": 1}))
-    if not bookings:
-        return set()
-    booking_ids = [doc["_id"] for doc in bookings]
     booked: Set[ObjectId] = set()
-    for ticket in get_tickets_collection().find(
-        {"bookingId": {"$in": booking_ids}}, {"seatId": 1}
-    ):
-        seat_id = ticket.get("seatId")
+    if bookings:
+        booking_ids = [doc["_id"] for doc in bookings]
+        for ticket in get_tickets_collection().find(
+            {"bookingId": {"$in": booking_ids}}, {"seatId": 1}
+        ):
+            seat_id = ticket.get("seatId")
+            if isinstance(seat_id, ObjectId):
+                booked.add(seat_id)
+
+    # Active reservations from other users
+    now = datetime.utcnow()
+    res_query: Dict = {"showId": show_id, "expiresAt": {"$gt": now}}
+    if exclude_email:
+        res_query["email"] = {"$not": {"$regex": f"^{exclude_email}$", "$options": "i"}}
+    for res_doc in get_seat_reservations_collection().find(res_query, {"seatId": 1}):
+        seat_id = res_doc.get("seatId")
         if isinstance(seat_id, ObjectId):
             booked.add(seat_id)
+
     return booked
 
 
@@ -107,7 +120,8 @@ def get_seat_map(show_id: str):
     if err:
         return err
 
-    booked_ids = _get_booked_seat_ids(show_doc["_id"])
+    current_email = _current_user_email() or request.headers.get("X-User-Email", "").strip()
+    booked_ids = _get_booked_seat_ids(show_doc["_id"], exclude_email=current_email)
 
     seats: List[Dict[str, Any]] = []
     rows_seen: List[str] = []
@@ -215,7 +229,7 @@ def get_checkout_summary():
         return jsonify({"message": "One or more seat IDs are invalid for this showroom."}), 400
 
     # ── Seat availability check ─────────────────────────────────────────────
-    booked_ids = _get_booked_seat_ids(show_doc["_id"])
+    booked_ids = _get_booked_seat_ids(show_doc["_id"], exclude_email=email)
     for oid in seat_oids:
         if oid in booked_ids:
             return jsonify({"message": "One or more selected seats are already booked."}), 409
@@ -291,3 +305,212 @@ def get_checkout_summary():
             "email":           email,
         }
     }), 200
+
+
+@booking_bp.post("/booking/reserve-seats")
+def reserve_seats():
+    """
+    Temporarily reserve seats for the current session (15-minute TTL).
+    Call this when the user proceeds from seat selection to checkout.
+
+    Expected body:
+      {
+        "showId":  "<id>",
+        "seatIds": ["<id>", ...],
+        "email":   "optional@override.com"
+      }
+    """
+    payload = request.get_json(silent=True) or {}
+
+    show_id_str    = str(payload.get("showId", "")).strip()
+    seat_ids       = payload.get("seatIds", [])
+    provided_email = str(payload.get("email", "")).strip()
+    email          = provided_email or _current_user_email()
+
+    if not show_id_str:
+        return jsonify({"message": "showId is required."}), 400
+    if not isinstance(seat_ids, list) or not seat_ids:
+        return jsonify({"message": "seatIds must be a non-empty array."}), 400
+    if not email:
+        return jsonify({
+            "message": "Authentication required. Please log in before reserving seats.",
+            "requiresLogin": True,
+        }), 401
+
+    show_doc, showroom_doc, err = _resolve_show(show_id_str)
+    if err:
+        return err
+
+    # Validate seat IDs belong to this showroom
+    seat_oids: List[ObjectId] = []
+    for sid in seat_ids:
+        try:
+            seat_oids.append(ObjectId(str(sid)))
+        except Exception:
+            return jsonify({"message": f"Invalid seat id: {sid}"}), 400
+
+    seat_docs = list(get_seats_collection().find({
+        "_id": {"$in": seat_oids},
+        "showroomId": showroom_doc["_id"],
+    }))
+    if len(seat_docs) != len(seat_oids):
+        return jsonify({"message": "One or more seat IDs are invalid for this showroom."}), 400
+
+    # Check not already booked or reserved by someone else
+    booked_ids = _get_booked_seat_ids(show_doc["_id"], exclude_email=email)
+    for oid in seat_oids:
+        if oid in booked_ids:
+            return jsonify({"message": "One or more selected seats are already taken."}), 409
+
+    # Replace any existing reservation for this user+show, then insert new ones
+    reservations = get_seat_reservations_collection()
+    now        = datetime.utcnow()
+    expires_at = now + timedelta(minutes=15)
+
+    reservations.delete_many({"showId": show_doc["_id"], "email": email})
+    reservations.insert_many([
+        {
+            "showId":    show_doc["_id"],
+            "seatId":    oid,
+            "email":     email,
+            "expiresAt": expires_at,
+        }
+        for oid in seat_oids
+    ])
+
+    return jsonify({
+        "message": "Seats reserved successfully.",
+        "data": {
+            "reservedSeatIds": [str(oid) for oid in seat_oids],
+            "expiresAt":       expires_at.isoformat() + "Z",
+        },
+    }), 200
+
+
+@booking_bp.post("/booking/confirm")
+def confirm_booking():
+    """
+    Finalise the booking: create a booking record and one ticket per seat.
+    Clears the session reservation on success.
+
+    Expected body:
+      {
+        "showId":          "<id>",
+        "selectedSeatIds": ["<id>", ...],
+        "ticketCounts":    {"adult": 1, "child": 0, "senior": 0},
+        "email":           "optional@override.com"
+      }
+    """
+    payload = request.get_json(silent=True) or {}
+
+    show_id_str       = str(payload.get("showId", "")).strip()
+    selected_seat_ids = payload.get("selectedSeatIds", [])
+    ticket_counts     = payload.get("ticketCounts", {})
+    provided_email    = str(payload.get("email", "")).strip()
+    email             = provided_email or _current_user_email()
+
+    if not show_id_str:
+        return jsonify({"message": "showId is required."}), 400
+    if not isinstance(selected_seat_ids, list) or not selected_seat_ids:
+        return jsonify({"message": "selectedSeatIds must be a non-empty array."}), 400
+    if not isinstance(ticket_counts, dict):
+        return jsonify({"message": "ticketCounts must be an object."}), 400
+    if not email:
+        return jsonify({
+            "message": "Authentication required. Please log in before confirming.",
+            "requiresLogin": True,
+        }), 401
+
+    show_doc, showroom_doc, err = _resolve_show(show_id_str)
+    if err:
+        return err
+
+    # Validate seat IDs
+    seat_oids: List[ObjectId] = []
+    for sid in selected_seat_ids:
+        try:
+            seat_oids.append(ObjectId(str(sid)))
+        except Exception:
+            return jsonify({"message": f"Invalid seat id: {sid}"}), 400
+
+    seat_docs = list(get_seats_collection().find({
+        "_id": {"$in": seat_oids},
+        "showroomId": showroom_doc["_id"],
+    }))
+    if len(seat_docs) != len(seat_oids):
+        return jsonify({"message": "One or more seat IDs are invalid for this showroom."}), 400
+
+    # Final conflict check (exclude current user's own reservation)
+    booked_ids = _get_booked_seat_ids(show_doc["_id"], exclude_email=email)
+    for oid in seat_oids:
+        if oid in booked_ids:
+            return jsonify({"message": "One or more selected seats are no longer available."}), 409
+
+    # Ticket count validation
+    counts = {
+        "ADULT":  int(ticket_counts.get("adult",  0) or 0),
+        "CHILD":  int(ticket_counts.get("child",  0) or 0),
+        "SENIOR": int(ticket_counts.get("senior", 0) or 0),
+    }
+    if any(q < 0 for q in counts.values()):
+        return jsonify({"message": "Ticket quantities cannot be negative."}), 400
+    total_tickets = sum(counts.values())
+    if total_tickets == 0:
+        return jsonify({"message": "At least one ticket is required."}), 400
+    if total_tickets != len(selected_seat_ids):
+        return jsonify({"message": "Seat count must match total number of tickets."}), 400
+
+    # Pricing
+    price_map    = _get_price_map()
+    total_price  = 0.0
+    for ticket_type, qty in counts.items():
+        if qty == 0:
+            continue
+        if ticket_type not in price_map:
+            return jsonify({"message": f"Missing ticket price for {ticket_type}."}), 500
+        total_price += price_map[ticket_type] * qty
+
+    # Resolve user
+    user_doc = get_users_collection().find_one({"emailLower": email.lower()})
+    if not user_doc:
+        return jsonify({"message": "User account not found."}), 404
+
+    # Create booking document
+    now = datetime.utcnow()
+    booking_doc = {
+        "userId":     user_doc["_id"],
+        "showId":     show_doc["_id"],
+        "email":      email,
+        "totalPrice": round(total_price, 2),
+        "status":     "confirmed",
+        "createdAt":  now,
+    }
+    booking_id = get_bookings_collection().insert_one(booking_doc).inserted_id
+
+    # Create one ticket per seat, consuming seat_oids in ticket-type order
+    seat_iter = iter(seat_oids)
+    for ticket_type, qty in counts.items():
+        price = price_map.get(ticket_type, 0.0)
+        for _ in range(qty):
+            get_tickets_collection().insert_one({
+                "bookingId":  booking_id,
+                "seatId":     next(seat_iter),
+                "ticketType": ticket_type,
+                "price":      round(float(price), 2),
+                "createdAt":  now,
+            })
+
+    # Clear this user's reservations for the show
+    get_seat_reservations_collection().delete_many({
+        "showId": show_doc["_id"],
+        "email":  email,
+    })
+
+    return jsonify({
+        "message": "Booking confirmed.",
+        "data": {
+            "bookingId":  str(booking_id),
+            "email":      email,
+            "totalPrice": round(total_price, 2),
+        },
+    }), 201

@@ -58,3 +58,6 @@ def get_recommendations_collection():
 
 def get_booking_history_collection():
     return get_db()["booking_history"]
+
+def get_seat_reservations_collection():
+    return get_db()["seat_reservations"]

@@ -27,23 +27,18 @@ async function normalizeUpstreamResponse(upstream: Response) {
   }
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ show_id: string }> }
-) {
-  const { show_id } = await params;
-  const userEmail = req.headers.get("x-user-email") || "";
+export async function POST(req: Request) {
+  const headers = Object.fromEntries(req.headers);
+  const body = await req.text();
 
-  const upstream = await fetch(
-    `${BACKEND_BASE}/api/booking/showtimes/${show_id}/seats`,
-    {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        ...(userEmail ? { "X-User-Email": userEmail } : {}),
-      },
-    }
-  );
+  const upstream = await fetch(`${BACKEND_BASE}/api/booking/reserve-seats`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-User-Email": headers["x-user-email"] || "",
+    },
+    body,
+  });
 
   return normalizeUpstreamResponse(upstream);
 }

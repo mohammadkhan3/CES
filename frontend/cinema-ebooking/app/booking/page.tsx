@@ -45,6 +45,7 @@ function BookingContent() {
   const [seatsLoading,  setSeatsLoading]  = useState(true);
   const [seatsError,    setSeatsError]    = useState("");
   const [error,         setError]         = useState("");
+  const [reserving,     setReserving]     = useState(false);
 
   const totalTickets = adultQty + childQty + seniorQty;
 
@@ -53,8 +54,12 @@ function BookingContent() {
     const load = async () => {
       setSeatsLoading(true);
       setSeatsError("");
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
       try {
-        const res = await fetch(`/api/booking/showtimes/${showId}/seats`, { cache: "no-store" });
+        const res = await fetch(`/api/booking/showtimes/${showId}/seats`, {
+          cache: "no-store",
+          headers: user?.email ? { "X-User-Email": user.email } : {},
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         setSeats(Array.isArray(json?.data?.seats) ? json.data.seats : []);
@@ -92,27 +97,64 @@ function BookingContent() {
     setError("");
   };
 
-  const handleProceed = () => {
+  const handleProceed = async () => {
     if (totalTickets === 0) { setError("Please select at least one ticket."); return; }
     if (selectedSeats.length !== totalTickets) {
       setError(`Please select exactly ${totalTickets} seat${totalTickets > 1 ? "s" : ""} to continue.`);
       return;
     }
 
-    const bookingState = {
-      showId, movieId, title, date, time, showroom, posterUrl, rating, genre,
-      adultQty, childQty, seniorQty,
-      selectedSeatIds: selectedSeats.map((s) => s.seatId),
-      selectedSeatLabels: selectedSeats.map((s) => s.seatLabel),
-    };
-    sessionStorage.setItem("pendingBooking", JSON.stringify(bookingState));
-
     const user = JSON.parse(localStorage.getItem("user") || "{}");
     if (!user?.userId) {
+      const bookingState = {
+        showId, movieId, title, date, time, showroom, posterUrl, rating, genre,
+        adultQty, childQty, seniorQty,
+        selectedSeatIds: selectedSeats.map((s) => s.seatId),
+        selectedSeatLabels: selectedSeats.map((s) => s.seatLabel),
+      };
+      sessionStorage.setItem("pendingBooking", JSON.stringify(bookingState));
       router.push("/login?redirect=/checkout");
       return;
     }
-    router.push("/checkout");
+
+    setReserving(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/booking/reserve-seats", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Email": user.email || "",
+        },
+        body: JSON.stringify({
+          showId,
+          seatIds: selectedSeats.map((s) => s.seatId),
+          email: user.email || "",
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setError(json.message || "Could not reserve seats. Please try again.");
+        return;
+      }
+
+      const bookingState = {
+        showId, movieId, title, date, time, showroom, posterUrl, rating, genre,
+        adultQty, childQty, seniorQty,
+        selectedSeatIds: selectedSeats.map((s) => s.seatId),
+        selectedSeatLabels: selectedSeats.map((s) => s.seatLabel),
+        reservedUntil: json.data?.expiresAt || null,
+      };
+      sessionStorage.setItem("pendingBooking", JSON.stringify(bookingState));
+      router.push("/checkout");
+    } catch {
+      setError("Could not connect to server. Please try again.");
+    } finally {
+      setReserving(false);
+    }
   };
 
   // Build a lookup for quick rendering
@@ -318,10 +360,10 @@ function BookingContent() {
 
               <button
                 onClick={handleProceed}
-                disabled={selectedSeats.length === 0 || selectedSeats.length !== totalTickets}
+                disabled={selectedSeats.length === 0 || selectedSeats.length !== totalTickets || reserving}
                 className="w-full border border-white hover:bg-white hover:text-black transition py-3 text-xs font-bold uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-white"
               >
-                Proceed to Checkout
+                {reserving ? "Reserving Seats..." : "Proceed to Checkout"}
               </button>
             </div>
           </div>

@@ -1,15 +1,18 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 const PRICES = { adult: 12, child: 8, senior: 10 };
 
 type BookingState = {
+  showId: string;
   title: string;
   date: string;
   time: string;
   showroom: string;
+  selectedSeatIds: string[];
   selectedSeatLabels: string[];
   adultQty: number;
   childQty: number;
@@ -30,12 +33,62 @@ function formatDate(d: string) {
 }
 
 function PaymentContent() {
-  const [booking, setBooking] = useState<BookingState | null>(null);
+  const router = useRouter();
+  const [booking,  setBooking]  = useState<BookingState | null>(null);
+  const [paying,   setPaying]   = useState(false);
+  const [payError, setPayError] = useState("");
 
   useEffect(() => {
     const raw = sessionStorage.getItem("pendingBooking");
     if (raw) setBooking(JSON.parse(raw));
   }, []);
+
+  const handlePay = async () => {
+    if (!booking) return;
+    setPaying(true);
+    setPayError("");
+
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const email = booking.confirmedEmail || user.email || "";
+
+    try {
+      const res = await fetch("/api/booking/confirm", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(email ? { "X-User-Email": email } : {}),
+        },
+        body: JSON.stringify({
+          showId:          booking.showId,
+          selectedSeatIds: booking.selectedSeatIds,
+          ticketCounts: {
+            adult:  booking.adultQty,
+            child:  booking.childQty,
+            senior: booking.seniorQty,
+          },
+          email,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setPayError(json.message || "Could not confirm booking. Please try again.");
+        return;
+      }
+
+      sessionStorage.setItem(
+        "confirmedBooking",
+        JSON.stringify({ ...booking, bookingId: json.data.bookingId, totalPrice: json.data.totalPrice, email: json.data.email })
+      );
+      sessionStorage.removeItem("pendingBooking");
+      router.push(`/booking-confirmation?bookingId=${json.data.bookingId}`);
+    } catch {
+      setPayError("Could not connect to server. Please try again.");
+    } finally {
+      setPaying(false);
+    }
+  };
 
   const subtotal = booking?.summary?.totalBeforeTax
     ?? (booking
@@ -133,21 +186,24 @@ function PaymentContent() {
 
           <div className="border border-yellow-900/40 bg-yellow-950/10 rounded px-4 py-3">
             <p className="text-[10px] uppercase tracking-widest text-yellow-700 text-center">
-              Mockup Payment Processing
+              Mockup — No real charge will be made
             </p>
           </div>
 
+          {payError && (
+            <p className="text-xs text-red-400 uppercase tracking-widest border border-red-900/60 bg-red-950/20 rounded px-3 py-2">
+              {payError}
+            </p>
+          )}
+
           <button
-            disabled
-            className="w-full border border-zinc-700 py-4 text-sm font-bold uppercase tracking-widest text-zinc-600 cursor-not-allowed rounded"
+            onClick={handlePay}
+            disabled={paying || !booking}
+            className="w-full border border-white hover:bg-white hover:text-black transition py-4 text-sm font-bold uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-white rounded"
           >
-            Pay ${subtotal.toFixed(2)}
+            {paying ? "Processing..." : `Pay $${subtotal.toFixed(2)}`}
           </button>
         </div>
-
-        <p className="text-center text-[10px] text-zinc-700 uppercase tracking-widest mt-6">
-          Full payment implementation in progress
-        </p>
       </div>
     </div>
   );
