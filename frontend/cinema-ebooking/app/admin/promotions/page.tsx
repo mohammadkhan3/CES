@@ -11,16 +11,15 @@ export default function ManagePromotionsPage() {
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem("user") || "{}");
-    if (user?.role !== "admin") {
-      router.push("/login");
-    }
+    if (user?.role !== "admin") router.push("/login");
   }, [router]);
 
   const [promo, setPromo] = useState({
     code: "",
     discountPercentage: "",
+    startDate: "",
     expirationDate: "",
-    sendEmail: false
+    sendEmail: false,
   });
 
   const handleSave = async (e: React.FormEvent) => {
@@ -39,27 +38,43 @@ export default function ManagePromotionsPage() {
     }
 
     setIsError(false);
-    setMessage(promo.sendEmail ? "Saving promotion and preparing emails..." : "Saving promotion...");
+    setMessage(promo.sendEmail ? "Saving promotion and sending emails..." : "Saving promotion...");
+
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
 
     try {
-      setTimeout(() => {
-        setIsError(false);
-        setMessage(promo.sendEmail 
-          ? "Promotion active! Emails dispatched to subscribed users." 
-          : "Promotion active! Saved silently without email blast."
-        );
-        
-        setPromo({
-          code: "",
-          discountPercentage: "",
-          expirationDate: "",
-          sendEmail: false
-        });
-        
-        setTimeout(() => setMessage(""), 4000);
-      }, 1000);
+      const res = await fetch("/api/admin/promotions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Email": user.email || "",
+        },
+        body: JSON.stringify(promo),
+      });
 
-    } catch (error) {
+      const data = await res.json();
+
+      if (res.status === 409) {
+        setIsError(true);
+        setMessage(data.message || "Promo code already exists.");
+        return;
+      }
+
+      if (!res.ok) {
+        setIsError(true);
+        setMessage(data.message || "Failed to create promotion.");
+        return;
+      }
+
+      setIsError(false);
+      const emailNote = promo.sendEmail
+        ? ` Emails sent to ${data.data?.emailsSent ?? 0} subscribed users.`
+        : " No emails sent.";
+      setMessage(`Promotion created successfully.${emailNote}`);
+
+      setPromo({ code: "", discountPercentage: "", startDate: "", expirationDate: "", sendEmail: false });
+      setTimeout(() => setMessage(""), 5000);
+    } catch {
       setIsError(true);
       setMessage("Server connection failed. Could not create promotion.");
     }
@@ -71,7 +86,7 @@ export default function ManagePromotionsPage() {
         <Link href="/admin" className="text-xs uppercase tracking-widest text-zinc-500 hover:text-white transition mb-6 inline-block">
           ← Back to Dashboard
         </Link>
-        
+
         <div className="border-b border-zinc-800 pb-6 mb-10">
           <h1 className="text-4xl font-bold uppercase tracking-wider text-white">Manage Promotions</h1>
           <p className="text-zinc-500 text-sm tracking-wide mt-2">
@@ -80,7 +95,7 @@ export default function ManagePromotionsPage() {
         </div>
 
         {message && (
-          <div className={`mb-8 p-4 border rounded font-bold uppercase tracking-widest text-sm transition-colors ${
+          <div className={`mb-8 p-4 border rounded font-bold uppercase tracking-widest text-sm ${
             isError ? "bg-red-950/30 border-red-900 text-red-500" : "bg-green-950/30 border-green-900 text-green-500"
           }`}>
             {message}
@@ -88,58 +103,70 @@ export default function ManagePromotionsPage() {
         )}
 
         <form onSubmit={handleSave} className="bg-zinc-950 border border-zinc-800 p-8 rounded-lg space-y-6">
-          
+
+          {/* Code + Discount */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-xs text-zinc-500 uppercase mb-2 font-bold tracking-widest">Promo Code *</label>
-              <input 
-                type="text" 
-                value={promo.code} 
-                onChange={(e) => setPromo({...promo, code: e.target.value.toUpperCase()})} 
-                className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded focus:border-red-600 outline-none transition text-white uppercase" 
+              <input
+                type="text"
+                value={promo.code}
+                onChange={(e) => setPromo({ ...promo, code: e.target.value.toUpperCase() })}
+                className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded focus:border-red-600 outline-none transition text-white uppercase"
               />
             </div>
-            
             <div>
               <label className="block text-xs text-zinc-500 uppercase mb-2 font-bold tracking-widest">Discount % *</label>
-              <input 
-                type="number" 
-                value={promo.discountPercentage} 
+              <input
+                type="number"
+                value={promo.discountPercentage}
                 onChange={(e) => {
                   let val = e.target.value;
-                  // Instantly stop the user from exceeding 100
                   if (Number(val) > 100) val = "100";
-                  if (Number(val) < 0) val = "0";
-                  setPromo({...promo, discountPercentage: val});
-                }} 
+                  if (Number(val) < 0)   val = "0";
+                  setPromo({ ...promo, discountPercentage: val });
+                }}
                 min="1"
                 max="100"
-                className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded focus:border-red-600 outline-none transition text-white" 
+                className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded focus:border-red-600 outline-none transition text-white"
               />
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs text-zinc-500 uppercase mb-2 font-bold tracking-widest">Expiration Date *</label>
-            <input 
-              type="date" 
-              value={promo.expirationDate} 
-              onChange={(e) => setPromo({...promo, expirationDate: e.target.value})} 
-              className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded focus:border-red-600 outline-none transition text-white [color-scheme:dark]" 
-            />
+          {/* Start + Expiration */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-xs text-zinc-500 uppercase mb-2 font-bold tracking-widest">Start Date</label>
+              <input
+                type="date"
+                value={promo.startDate}
+                onChange={(e) => setPromo({ ...promo, startDate: e.target.value })}
+                className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded focus:border-red-600 outline-none transition text-white [color-scheme:dark]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-500 uppercase mb-2 font-bold tracking-widest">Expiration Date *</label>
+              <input
+                type="date"
+                value={promo.expirationDate}
+                onChange={(e) => setPromo({ ...promo, expirationDate: e.target.value })}
+                className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded focus:border-red-600 outline-none transition text-white [color-scheme:dark]"
+              />
+            </div>
           </div>
 
+          {/* Email toggle */}
           <div className="pt-6 border-t border-zinc-800">
             <label className="flex items-center gap-3 cursor-pointer group">
               <div className="relative">
-                <input 
-                  type="checkbox" 
-                  checked={promo.sendEmail} 
-                  onChange={(e) => setPromo({...promo, sendEmail: e.target.checked})}
+                <input
+                  type="checkbox"
+                  checked={promo.sendEmail}
+                  onChange={(e) => setPromo({ ...promo, sendEmail: e.target.checked })}
                   className="sr-only"
                 />
-                <div className={`block w-10 h-6 rounded-full transition-colors ${promo.sendEmail ? 'bg-red-600' : 'bg-zinc-800'}`}></div>
-                <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${promo.sendEmail ? 'translate-x-4' : ''}`}></div>
+                <div className={`block w-10 h-6 rounded-full transition-colors ${promo.sendEmail ? "bg-red-600" : "bg-zinc-800"}`} />
+                <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${promo.sendEmail ? "translate-x-4" : ""}`} />
               </div>
               <div>
                 <span className="text-sm font-bold uppercase tracking-widest text-white block">Email Subscribers</span>
@@ -149,8 +176,8 @@ export default function ManagePromotionsPage() {
           </div>
 
           <div className="pt-4 flex justify-end">
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded font-bold uppercase tracking-widest transition"
             >
               Save Promotion
