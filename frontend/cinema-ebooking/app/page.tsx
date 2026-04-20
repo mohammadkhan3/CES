@@ -148,24 +148,6 @@ function MovieCard({
         {movie.title}
       </h3>
 
-      {!comingSoon && (
-        <div className="mt-3 flex justify-center gap-2 flex-wrap">
-          {showtimes.length > 0 ? (
-            showtimes.slice(0, 3).map((show) => (
-              <Link
-                key={show.id}
-                href={`/booking?showId=${show.id}&title=${encodeURIComponent(movie.title)}&showtime=${encodeURIComponent(show.display || `${show.date} ${show.time}`)}`}
-                onClick={(e) => e.stopPropagation()}
-                className="text-xs px-3 py-1 border border-zinc-600 rounded text-zinc-300 hover:border-red-500 hover:text-white transition"
-              >
-                {show.time}
-              </Link>
-            ))
-          ) : (
-            <span className="text-xs text-zinc-400">No showtimes available</span>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -256,7 +238,7 @@ export default function HomePage() {
           runningMovies = Array.isArray(data.currently_running) ? data.currently_running : [];
           comingSoonMovies = Array.isArray(data.coming_soon) ? data.coming_soon : [];
         }
-         
+          
       setRunning(runningMovies);
       setComingSoon(comingSoonMovies);
 
