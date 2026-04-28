@@ -9,6 +9,7 @@ from app.routes.auth import auth_bp
 from app.routes.booking import booking_bp
 from app.routes.movies import movies_bp
 from app.routes.profile import profile_bp
+from app.routes.history_ai import history_ai_bp
 
 def create_app():
     load_dotenv()
@@ -27,4 +28,5 @@ def create_app():
     app.register_blueprint(profile_bp, url_prefix="/api")
     app.register_blueprint(booking_bp, url_prefix="/api")
     app.register_blueprint(admin_bp, url_prefix="/api")
+    app.register_blueprint(history_ai_bp, url_prefix="/api")
     return app
