@@ -162,7 +162,7 @@ function MovieCard({
               </Link>
             ))
           ) : (
-            <span className="text-xs text-zinc-400">No showtimes available</span>
+            <span className="text-xs text-zinc-400">Not currently running</span>
           )}
         </div>
       )}
@@ -184,6 +184,9 @@ export default function HomePage() {
   const [userEmail, setUserEmail] = useState("");
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [showtimesByMovie, setShowtimesByMovie] = useState<Record<string, Showtime[]>>({});
+  const [recommendations, setRecommendations] = useState<Movie[]>([]);
+  const [recommendationIndex, setRecommendationIndex] = useState(0);
+  const [recommendationShowtimes, setRecommendationShowtimes] = useState<Record<string, Showtime[]>>({});
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -228,6 +231,71 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    async function loadRecommendations() {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+      if (!user?.email) {
+        setRecommendations([]);
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/recommendations", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-User-Email": user.email,
+          },
+        });
+
+        const data = await res.json();
+
+        if (data.success && Array.isArray(data.recommendations)) {
+          const mapped: Movie[] = data.recommendations.map((m: any) => ({
+            id: m.movieId,
+            title: m.title,
+            genre: m.genre,
+            rating: m.rating,
+            description: m.description,
+            poster_url: m.posterUrl,
+            trailer_url: m.trailerUrl,
+            status: "recommended",
+          }));
+
+          setRecommendations(mapped);
+
+          const showtimeEntries = await Promise.all(
+            mapped.map(async (movie) => {
+              try {
+                const showtimeRes = await fetch(`/api/movies/${movie.id}/showtimes`, {
+                  cache: "no-store",
+                });
+
+                const showtimeJson = await showtimeRes.json();
+
+                return [
+                  movie.id,
+                  Array.isArray(showtimeJson?.data) ? showtimeJson.data : [],
+                ] as const;
+              } catch {
+                return [movie.id, []] as const;
+              }
+            })
+          );
+
+          setRecommendationShowtimes(Object.fromEntries(showtimeEntries));
+        }
+      } catch (error) {
+        console.error("Error loading recommendations:", error);
+        setRecommendations([]);
+        setRecommendationShowtimes({});
+      }
+    }
+
+    loadRecommendations();
+  }, []);
+
+  useEffect(() => {
     async function load() {
       setLoading(true);
       try {
@@ -256,11 +324,11 @@ export default function HomePage() {
           runningMovies = Array.isArray(data.currently_running) ? data.currently_running : [];
           comingSoonMovies = Array.isArray(data.coming_soon) ? data.coming_soon : [];
         }
-         
-      setRunning(runningMovies);
-      setComingSoon(comingSoonMovies);
 
-      const showtimeEntries = await Promise.all(
+        setRunning(runningMovies);
+        setComingSoon(comingSoonMovies);
+
+        const showtimeEntries = await Promise.all(
           runningMovies.map(async (movie) => {
             try {
               const res = await fetch(`/api/movies/${movie.id}/showtimes`, {
@@ -290,6 +358,18 @@ export default function HomePage() {
   const showRunningSkeletons = loading;
   const showComingSkeletons = loading && !isFiltering;
   const noMatches = !loading && isFiltering && running.length === 0;
+
+  const goToPrevRecommendation = () => {
+    setRecommendationIndex((prev) =>
+      prev === 0 ? recommendations.length - 1 : prev - 1
+    );
+  };
+
+  const goToNextRecommendation = () => {
+    setRecommendationIndex((prev) =>
+      prev === recommendations.length - 1 ? 0 : prev + 1
+    );
+  };
 
   return (
     <div className="min-h-screen bg-black text-white px-6 py-12">
@@ -327,6 +407,55 @@ export default function HomePage() {
             )}
           </div>
         </section>
+
+        {!isFiltering && recommendations.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-semibold tracking-wide">
+                  Recommended For You
+                </h2>
+                <p className="text-sm text-zinc-400 mt-2">
+                  Personalized picks based on your order history.
+                </p>
+              </div>
+
+              <div className="text-sm text-zinc-400">
+                {recommendationIndex + 1} / {recommendations.length}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-center gap-6">
+              <button
+                onClick={goToPrevRecommendation}
+                className="h-12 w-12 rounded-full border border-zinc-700 text-2xl hover:border-red-500 hover:text-red-500 transition"
+                aria-label="Previous recommendation"
+              >
+                ‹
+              </button>
+
+              <div className="w-full max-w-sm">
+                <MovieCard
+                  movie={recommendations[recommendationIndex]}
+                  onClick={() => setSelectedMovie(recommendations[recommendationIndex])}
+                  favoriteIds={favoriteIds}
+                  onFavoriteChange={loadFavorites}
+                  showtimes={
+                    recommendationShowtimes[recommendations[recommendationIndex].id] || []
+                  }
+                />
+              </div>
+
+              <button
+                onClick={goToNextRecommendation}
+                className="h-12 w-12 rounded-full border border-zinc-700 text-2xl hover:border-red-500 hover:text-red-500 transition"
+                aria-label="Next recommendation"
+              >
+                ›
+              </button>
+            </div>
+          </section>
+        )}
 
         {!isFiltering && (
           <section>
