@@ -324,6 +324,9 @@ export default function HomePage() {
           runningMovies = Array.isArray(data.currently_running) ? data.currently_running : [];
           comingSoonMovies = Array.isArray(data.coming_soon) ? data.coming_soon : [];
         }
+          
+      setRunning(runningMovies);
+      setComingSoon(comingSoonMovies);
 
         setRunning(runningMovies);
         setComingSoon(comingSoonMovies);
