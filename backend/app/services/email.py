@@ -93,6 +93,78 @@ def send_promotion_email(
     client.send(message)
 
 
+def send_booking_confirmation_email(
+    recipient_email: str,
+    booking_id: str,
+    movie_title: str,
+    show_date: str,
+    show_time: str,
+    showroom_name: str,
+    seats: list,
+    ticket_counts: dict,
+    total_price: float,
+) -> None:
+    api_key = os.getenv("SENDGRID_API_KEY")
+    sender = os.getenv("EMAIL_SENDER", "no-reply@ces.local")
+
+    if not api_key:
+        raise RuntimeError("SENDGRID_API_KEY is not configured")
+
+    seat_labels = ", ".join(f"{s['row']}{s['seatNumber']}" for s in seats)
+    ticket_lines_text = "\n".join(
+        f"  {t_type.capitalize()}: {qty}"
+        for t_type, qty in ticket_counts.items()
+        if qty > 0
+    )
+    ticket_lines_html = "".join(
+        f"<li>{t_type.capitalize()}: {qty}</li>"
+        for t_type, qty in ticket_counts.items()
+        if qty > 0
+    )
+
+    subject = f"Booking Confirmed – {movie_title} | CES Cinema"
+
+    text_body = (
+        f"Hello,\n\n"
+        f"Your booking is confirmed! Here are your details:\n\n"
+        f"Movie:       {movie_title}\n"
+        f"Date:        {show_date}\n"
+        f"Time:        {show_time}\n"
+        f"Showroom:    {showroom_name}\n"
+        f"Seats:       {seat_labels}\n"
+        f"Tickets:\n{ticket_lines_text}\n"
+        f"Total Paid:  ${total_price:.2f}\n"
+        f"Booking ID:  {booking_id}\n\n"
+        f"Enjoy the show!\n"
+        f"– CES Cinema"
+    )
+    html_body = (
+        f"<h2>Booking Confirmed!</h2>"
+        f"<table style='border-collapse:collapse;'>"
+        f"<tr><td><strong>Movie</strong></td><td>{movie_title}</td></tr>"
+        f"<tr><td><strong>Date</strong></td><td>{show_date}</td></tr>"
+        f"<tr><td><strong>Time</strong></td><td>{show_time}</td></tr>"
+        f"<tr><td><strong>Showroom</strong></td><td>{showroom_name}</td></tr>"
+        f"<tr><td><strong>Seats</strong></td><td>{seat_labels}</td></tr>"
+        f"<tr><td><strong>Tickets</strong></td><td><ul>{ticket_lines_html}</ul></td></tr>"
+        f"<tr><td><strong>Total Paid</strong></td><td>${total_price:.2f}</td></tr>"
+        f"<tr><td><strong>Booking ID</strong></td><td>{booking_id}</td></tr>"
+        f"</table>"
+        f"<p>Enjoy the show! – CES Cinema</p>"
+    )
+
+    message = Mail(
+        from_email=sender,
+        to_emails=recipient_email,
+        subject=subject,
+        plain_text_content=text_body,
+        html_content=html_body,
+    )
+
+    client = SendGridAPIClient(api_key)
+    client.send(message)
+
+
 def send_profile_update_email(recipient_email: str) -> None:
     api_key = os.getenv("SENDGRID_API_KEY")
     sender = os.getenv("EMAIL_SENDER", "no-reply@ces.local")

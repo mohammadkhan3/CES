@@ -16,6 +16,7 @@ from app.db import (
     get_users_collection,
 )
 from app.utils import movie_to_json
+from app.services.email import send_booking_confirmation_email
 
 booking_bp = Blueprint("booking", __name__)
 
@@ -505,6 +506,28 @@ def confirm_booking():
         "showId": show_doc["_id"],
         "email":  email,
     })
+
+    # Send confirmation email (best-effort — don't fail the booking if email errors)
+    try:
+        movie_doc = get_movies_collection().find_one({"_id": show_doc["movieId"]})
+        movie_title = movie_doc.get("title", "Your Movie") if movie_doc else "Your Movie"
+        seat_info = [
+            {"row": s.get("row", ""), "seatNumber": str(s.get("seatNumber", ""))}
+            for s in seat_docs
+        ]
+        send_booking_confirmation_email(
+            recipient_email=email,
+            booking_id=str(booking_id),
+            movie_title=movie_title,
+            show_date=str(show_doc.get("date", "")),
+            show_time=str(show_doc.get("time", "")),
+            showroom_name=str(showroom_doc.get("name", "")),
+            seats=seat_info,
+            ticket_counts={k.lower(): v for k, v in counts.items()},
+            total_price=round(total_price, 2),
+        )
+    except Exception:
+        pass  # email failure must not roll back a confirmed booking
 
     return jsonify({
         "message": "Booking confirmed.",
