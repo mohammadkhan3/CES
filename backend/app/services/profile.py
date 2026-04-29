@@ -339,3 +339,12 @@ def remove_favorite(user: Dict[str, Any], movie_id: str) -> None:
         {"_id": user["_id"]},
         {"$pull": {"favoriteMovies": movie_obj_id}},
     )
+
+
+def get_current_user(email: str) -> Optional[Dict[str, Any]]:
+    users = get_users_collection()
+    if email:
+        user = users.find_one({"emailLower": email.lower()}) or users.find_one({"email": email})
+        if user:
+            return user
+    return users.find_one({"role": "customer", "status": "ACTIVE"}) or users.find_one({"role": "customer"})

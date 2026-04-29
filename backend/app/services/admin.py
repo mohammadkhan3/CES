@@ -235,3 +235,15 @@ def create_promotion(payload: dict) -> dict:
         "promoCode":  promo_code,
         "emailsSent": email_count,
     }
+
+
+def is_admin(role: str, email: str) -> bool:
+    if role == "admin":
+        return True
+    if email:
+        user = get_users_collection().find_one(
+            {"emailLower": email.lower()}, {"role": 1}
+        )
+        if user and user.get("role") == "admin":
+            return True
+    return False

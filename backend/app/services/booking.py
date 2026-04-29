@@ -400,3 +400,19 @@ def confirm_booking(
         "seats":      seat_info,
         "ticketCounts": {k.lower(): v for k, v in counts.items()},
     }
+
+
+def get_current_user_email(header_email: str, session_uid: str) -> str:
+    users = get_users_collection()
+    if header_email:
+        user = users.find_one({"emailLower": header_email.lower()})
+        if user and user.get("email"):
+            return str(user["email"]).strip()
+    if session_uid:
+        try:
+            user = users.find_one({"_id": ObjectId(session_uid)})
+            if user and user.get("email"):
+                return str(user["email"]).strip()
+        except Exception:
+            pass
+    return ""

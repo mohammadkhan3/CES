@@ -2,38 +2,14 @@ from typing import Any, Dict, Optional
 
 from flask import Blueprint, jsonify, request
 
-from app.db import get_users_collection
 from app.services.email import send_profile_update_email
-from app.services.profile import ProfileError, add_favorite, get_profile, remove_favorite, update_profile
+from app.services.profile import ProfileError, add_favorite, get_current_user, get_profile, remove_favorite, update_profile
 
 profile_bp = Blueprint("profile", __name__)
 
 
 def _get_current_user() -> Optional[Dict[str, Any]]:
-    """
-    Demo-friendly current-user lookup since auth/login is not fully wired yet.
-    Priority:
-    1. X-User-Email header
-    2. first ACTIVE customer
-    3. first customer
-    """
-    users = get_users_collection()
-
-    x_user_email = request.headers.get("X-User-Email", "").strip()
-    if x_user_email:
-        user = users.find_one({"emailLower": x_user_email.lower()})
-        if user:
-            return user
-
-        user = users.find_one({"email": x_user_email})
-        if user:
-            return user
-
-    user = users.find_one({"role": "customer", "status": "ACTIVE"})
-    if user:
-        return user
-
-    return users.find_one({"role": "customer"})
+    return get_current_user(request.headers.get("X-User-Email", "").strip())
 
 
 @profile_bp.get("/profile")

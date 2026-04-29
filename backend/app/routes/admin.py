@@ -1,24 +1,14 @@
 from flask import Blueprint, jsonify, request, session
 
-from app.db import get_users_collection
-from app.services.admin import AdminError, create_movie, create_promotion, create_showtime, list_showrooms
+from app.services.admin import AdminError, create_movie, create_promotion, create_showtime, is_admin, list_showrooms
 
 admin_bp = Blueprint("admin", __name__)
 
 
 def _require_admin():
-    if session.get("role") == "admin":
-        return None
-
-    x_email = request.headers.get("X-User-Email", "").strip()
-    if x_email:
-        user = get_users_collection().find_one(
-            {"emailLower": x_email.lower()}, {"role": 1}
-        )
-        if user and user.get("role") == "admin":
-            return None
-
-    return jsonify({"message": "Admin access required."}), 403
+    if not is_admin(session.get("role", ""), request.headers.get("X-User-Email", "").strip()):
+        return jsonify({"message": "Admin access required."}), 403
+    return None
 
 
 @admin_bp.post("/admin/movies")
