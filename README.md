@@ -71,5 +71,5 @@ npm run dev
 - To test different User Roles (seeded pre-set roles)
 ```
 Admin: `admin@ces.com` / `ChangeMe123!`
-Customer: `john@example.com` / `ChangeMe123!!`
+Customer: `john@example.com` / `ChangeMe123!`
 ```
