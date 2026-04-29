@@ -1,182 +1,60 @@
-import os
-import re
-from datetime import datetime, timedelta
 from flask import Blueprint, current_app, jsonify, request, session
-from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
-from app.db import get_users_collection
-from app.security import hash_password, verify_password
-from app.services.email import build_confirmation_link, send_confirmation_email
+from app.services.auth import AuthError, confirm_user, forgot_password, login_user, register_user
+from app.services.auth import validate_registration_payload
+from app.services.email import build_confirmation_link
 
 auth_bp = Blueprint("auth", __name__)
 
-_EMAIL_REGEX = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
-_PASSWORD_COMPLEXITY = re.compile(r"^(?=.*[A-Za-z])(?=.*\d).{8,}$")
-_CONFIRMATION_SALT = "user-confirmation"
-
-
-def _get_serializer() -> URLSafeTimedSerializer:
-    secret_key = current_app.config.get("SECRET_KEY")
-    if not secret_key:
-        raise RuntimeError("SECRET_KEY must be configured before using auth routes")
-    return URLSafeTimedSerializer(secret_key)
-
-
-def _validate_payload(payload):
-    errors = {}
-
-    first_name = (payload.get("firstName") or "").strip()
-    last_name = (payload.get("lastName") or "").strip()
-    email_raw = (payload.get("email") or "").strip()
-    password = payload.get("password") or ""
-
-    if not first_name:
-        errors["firstName"] = "First name is required."
-    if not last_name:
-        errors["lastName"] = "Last name is required."
-    if not email_raw or not _EMAIL_REGEX.match(email_raw):
-        errors["email"] = "A valid email address is required."
-    if not password or not _PASSWORD_COMPLEXITY.match(password):
-        errors["password"] = "Password must be at least 8 characters and include letters and numbers."
-
-    cleaned = {
-        "firstName": first_name,
-        "lastName": last_name,
-        "emailRaw": email_raw,
-        "emailLower": email_raw.lower(),
-        "password": password,
-    }
-    return cleaned, errors
-
-
-def _confirmation_ttl_hours() -> int:
-    return int(os.getenv("EMAIL_CONFIRM_TTL_HOURS", "24"))
-
 
 @auth_bp.post("/auth/register")
-def register_user():
+def register_user_route():
     payload = request.get_json(silent=True) or {}
-    cleaned, errors = _validate_payload(payload)
-
+    cleaned, errors = validate_registration_payload(payload)
     if errors:
         return jsonify({"message": "Invalid registration data", "errors": errors}), 400
 
-    users = get_users_collection()
-
-    if users.find_one({"emailLower": cleaned["emailLower"]}):
-        return jsonify({"message": "An account with this email already exists."}), 409
-
-    serializer = _get_serializer()
-    now = datetime.utcnow()
-    token = serializer.dumps(cleaned["emailLower"], salt=_CONFIRMATION_SALT)
-    expires_at = now + timedelta(hours=_confirmation_ttl_hours())
-
-    user_doc = {
-        "firstName": cleaned["firstName"],
-        "lastName": cleaned["lastName"],
-        "email": cleaned["emailRaw"],
-        "emailLower": cleaned["emailLower"],
-        "password": hash_password(cleaned["password"]),
-        "status": "INACTIVE",
-        "role": "customer",
-        "confirmationToken": token,
-        "confirmationExpiresAt": expires_at,
-        "createdAt": now,
-        "updatedAt": now,
-    }
-
-    result = users.insert_one(user_doc)
-
     try:
-        send_confirmation_email(cleaned["emailRaw"], token)
-    except Exception as exc:
-        confirmation_link = build_confirmation_link(token)
-        current_app.logger.warning("Failed to send confirmation email: %s", exc)
-        current_app.logger.info("Confirmation link for %s: %s", cleaned["emailRaw"], confirmation_link)
+        result = register_user(payload)
+    except AuthError as e:
+        return jsonify({"message": e.message}), e.status
 
-    return (
-        jsonify({
-            "message": "Registration successful. Check your email to confirm your account.",
-            "data": {"userId": str(result.inserted_id)},
-        }),
-        201,
-    )
+    if result.get("email_error"):
+        confirmation_link = build_confirmation_link(result["token"])
+        current_app.logger.warning("Failed to send confirmation email: %s", result["email_error"])
+        current_app.logger.info("Confirmation link for %s: %s", result["email"], confirmation_link)
+
+    return jsonify({
+        "message": "Registration successful. Check your email to confirm your account.",
+        "data":    {"userId": result["userId"]},
+    }), 201
 
 
 @auth_bp.get("/auth/confirm/<token>")
-def confirm_user(token):
-    serializer = _get_serializer()
-    max_age_seconds = _confirmation_ttl_hours() * 3600
-
+def confirm_user_route(token):
     try:
-        email_lower = serializer.loads(token, salt=_CONFIRMATION_SALT, max_age=max_age_seconds)
-    except SignatureExpired:
-        return jsonify({"message": "Confirmation link has expired."}), 400
-    except BadSignature:
-        return jsonify({"message": "Invalid confirmation token."}), 400
+        outcome = confirm_user(token)
+    except AuthError as e:
+        return jsonify({"message": e.message}), e.status
 
-    users = get_users_collection()
-    user = users.find_one({"emailLower": email_lower})
+    return jsonify({"message": "Account confirmed successfully." if outcome == "confirmed" else "Account already active."}), 200
 
-    if not user:
-        return jsonify({"message": "User not found."}), 404
-
-    if user.get("status") == "ACTIVE":
-        return jsonify({"message": "Account already active."}), 200
-
-    stored_token = user.get("confirmationToken")
-    if not stored_token or stored_token != token:
-        return jsonify({"message": "Confirmation token does not match."}), 400
-
-    expires_at = user.get("confirmationExpiresAt")
-    if expires_at and expires_at < datetime.utcnow():
-        return jsonify({"message": "Confirmation link has expired."}), 400
-
-    users.update_one(
-        {"_id": user["_id"]},
-        {
-            "$set": {
-                "status": "ACTIVE",
-                "confirmationToken": None,
-                "confirmationExpiresAt": None,
-                "updatedAt": datetime.utcnow(),
-            }
-        },
-    )
-
-    return jsonify({"message": "Account confirmed successfully."}), 200
 
 @auth_bp.post("/auth/login")
-def login_user():
-    payload = request.get_json(silent=True) or {}
-    email_raw = (payload.get("email") or "").strip()
-    password = payload.get("password") or ""
+def login_user_route():
+    payload   = request.get_json(silent=True) or {}
+    email_raw = (payload.get("email")    or "").strip()
+    password  = (payload.get("password") or "")
 
-    if not email_raw or not password:
-        return jsonify({"message": "Email and password are required."}), 400
+    try:
+        data = login_user(email_raw, password)
+    except AuthError as e:
+        return jsonify({"message": e.message}), e.status
 
-    users = get_users_collection()
-    user = users.find_one({"emailLower": email_raw.lower()})
+    session["userId"] = data["userId"]
+    session["role"]   = data["role"]
 
-    if not user or not verify_password(password, user["password"]):
-        return jsonify({"message": "Invalid email or password."}), 401
-
-    if user.get("status") != "ACTIVE":
-        return jsonify({"message": "Please confirm your email before logging in."}), 403
-
-    session["userId"] = str(user["_id"])
-    session["role"] = user.get("role", "customer")
-
-    return jsonify({
-        "message": "Login successful.",
-        "data": {
-            "userId": str(user["_id"]),
-            "firstName": user["firstName"],
-            "lastName": user["lastName"],
-            "email": user["email"],
-            "role": user.get("role", "customer"),
-        }
-    }), 200
+    return jsonify({"message": "Login successful.", "data": data}), 200
 
 
 @auth_bp.post("/auth/logout")
@@ -186,27 +64,18 @@ def logout_user():
 
 
 @auth_bp.post("/auth/forgot-password")
-def forgot_password():
-    payload = request.get_json(silent=True) or {}
+def forgot_password_route():
+    payload   = request.get_json(silent=True) or {}
     email_raw = (payload.get("email") or "").strip()
 
-    if not email_raw:
-        return jsonify({"message": "Email is required."}), 400
-
-    users = get_users_collection()
-    user = users.find_one({"emailLower": email_raw.lower()})
-
-    if not user:
-        return jsonify({"message": "If an account exists, a reset link has been sent."}), 200
-
-    serializer = _get_serializer()
-    token = serializer.dumps(email_raw.lower(), salt="password-reset")
-    reset_link = f"{os.getenv('APP_BASE_URL', 'http://localhost:3000')}/reset-password?token={token}"
-    current_app.logger.info("Password reset link for %s: %s", email_raw, reset_link)
-
     try:
-        send_confirmation_email(email_raw, token)
-    except Exception as exc:
-        current_app.logger.warning("Failed to send reset email: %s", exc)
+        result = forgot_password(email_raw)
+    except AuthError as e:
+        return jsonify({"message": e.message}), e.status
+
+    if result["sent"]:
+        current_app.logger.info("Password reset link for %s: %s", result["email"], result["reset_link"])
+        if result.get("email_error"):
+            current_app.logger.warning("Failed to send reset email: %s", result["email_error"])
 
     return jsonify({"message": "If an account exists, a reset link has been sent."}), 200
