@@ -174,6 +174,33 @@ class ProfileUpdateEmail(EmailNotification):
         )
 
 
+class PasswordResetEmail(EmailNotification):
+    def __init__(self, reset_link: str):
+        super().__init__()
+        self._reset_link = reset_link
+
+    def build_message(self, recipient: str) -> Mail:
+        link = self._reset_link
+        return Mail(
+            from_email=self._sender,
+            to_emails=recipient,
+            subject="Reset your CES Cinema password",
+            plain_text_content=(
+                "Hello,\n\n"
+                "We received a request to reset your CES Cinema password.\n"
+                "Click the link below to choose a new password (expires in 1 hour):\n\n"
+                f"{link}\n\n"
+                "If you did not request this, you can safely ignore this email."
+            ),
+            html_content=(
+                "<p>Hello,</p>"
+                "<p>We received a request to reset your CES Cinema password.</p>"
+                f"<p><a href='{link}'>Click here to reset your password</a> (expires in 1 hour).</p>"
+                "<p>If you did not request this, you can safely ignore this email.</p>"
+            ),
+        )
+
+
 # ── Backward-compatible module-level functions ─────────────────────────────────
 
 def send_confirmation_email(recipient_email: str, token: str) -> None:
@@ -208,3 +235,7 @@ def send_booking_confirmation_email(
 
 def send_profile_update_email(recipient_email: str) -> None:
     ProfileUpdateEmail().send(recipient_email)
+
+
+def send_password_reset_email(recipient_email: str, reset_link: str) -> None:
+    PasswordResetEmail(reset_link).send(recipient_email)

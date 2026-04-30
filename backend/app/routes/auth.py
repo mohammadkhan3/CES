@@ -1,6 +1,6 @@
 from flask import Blueprint, current_app, jsonify, request, session
 
-from app.services.auth import AuthError, confirm_user, forgot_password, login_user, register_user
+from app.services.auth import AuthError, confirm_user, forgot_password, login_user, register_user, reset_password
 from app.services.auth import validate_registration_payload
 from app.services.email import build_confirmation_link
 
@@ -79,3 +79,17 @@ def forgot_password_route():
             current_app.logger.warning("Failed to send reset email: %s", result["email_error"])
 
     return jsonify({"message": "If an account exists, a reset link has been sent."}), 200
+
+
+@auth_bp.post("/auth/reset-password")
+def reset_password_route():
+    payload      = request.get_json(silent=True) or {}
+    token        = (payload.get("token")       or "").strip()
+    new_password = (payload.get("newPassword") or "")
+
+    try:
+        reset_password(token, new_password)
+    except AuthError as e:
+        return jsonify({"message": e.message}), e.status
+
+    return jsonify({"message": "Password reset successfully."}), 200
