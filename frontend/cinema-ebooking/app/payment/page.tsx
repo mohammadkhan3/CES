@@ -24,6 +24,12 @@ type BookingState = {
   };
 };
 
+type SavedCard = {
+  cardNumber?: string;
+  last4?: string;
+  cardType?: string;
+};
+
 function formatDate(d: string) {
   try {
     return new Date(d + "T00:00:00").toLocaleDateString("en-US", {
@@ -38,9 +44,36 @@ function PaymentContent() {
   const [paying,   setPaying]   = useState(false);
   const [payError, setPayError] = useState("");
 
+  const [savedCards, setSavedCards] = useState<SavedCard[]>([]);
+  const [selectedCardIndex, setSelectedCardIndex] = useState(0);
+  const [loadingCards, setLoadingCards] = useState(true);
+
   useEffect(() => {
     const raw = sessionStorage.getItem("pendingBooking");
     if (raw) setBooking(JSON.parse(raw));
+
+    const loadProfile = async () => {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      if (!user?.email) {
+        setLoadingCards(false);
+        return;
+      }
+      try {
+        const res = await fetch("/api/profile", {
+          headers: { "X-User-Email": user.email },
+        });
+        const data = await res.json();
+        const cards = data?.paymentCards || data?.cards || [];
+        if (Array.isArray(cards)) {
+          setSavedCards(cards);
+        }
+      } catch (err) {
+        console.error("Could not load profile cards");
+      } finally {
+        setLoadingCards(false);
+      }
+    };
+    loadProfile();
   }, []);
 
   const handlePay = async () => {
@@ -137,52 +170,76 @@ function PaymentContent() {
             Card Details
           </h2>
 
-          <div className="space-y-1">
-            <label className="text-[10px] uppercase tracking-widest text-zinc-500">Cardholder Name</label>
-            <input
-              type="text"
-              disabled
-              placeholder="Full name on card"
-              className="w-full bg-zinc-900 border border-zinc-700 px-4 py-2.5 text-sm rounded text-zinc-500 cursor-not-allowed"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-[10px] uppercase tracking-widest text-zinc-500">Card Number</label>
-            <div className="relative">
-              <input
-                type="text"
-                disabled
-                placeholder="•••• •••• •••• ••••"
-                className="w-full bg-zinc-900 border border-zinc-700 px-4 py-2.5 text-sm rounded text-zinc-500 cursor-not-allowed"
-              />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1 opacity-30">
-                <div className="w-6 h-4 rounded-sm bg-red-500" />
-                <div className="w-6 h-4 rounded-sm bg-yellow-400 -ml-2 opacity-80" />
+          {loadingCards ? (
+            <div className="h-10 w-full bg-zinc-900 border border-zinc-800 animate-pulse rounded" />
+          ) : savedCards.length > 0 ? (
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase tracking-widest text-zinc-500">Select Saved Card</label>
+              <select
+                value={selectedCardIndex}
+                onChange={(e) => setSelectedCardIndex(Number(e.target.value))}
+                className="w-full bg-zinc-900 border border-zinc-700 px-4 py-3 text-sm rounded text-white outline-none appearance-none"
+              >
+                {savedCards.map((card, index) => {
+                  const displayLast4 = card.last4 || card.cardNumber?.slice(-4) || "****";
+                  return (
+                    <option key={index} value={index}>
+                      {card.cardType || "Card"} ending in {displayLast4}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase tracking-widest text-zinc-500">Cardholder Name</label>
+                <input
+                  type="text"
+                  disabled
+                  placeholder="Full name on card"
+                  className="w-full bg-zinc-900 border border-zinc-700 px-4 py-2.5 text-sm rounded text-zinc-500 cursor-not-allowed"
+                />
               </div>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-[10px] uppercase tracking-widest text-zinc-500">Expiry</label>
-              <input
-                type="text"
-                disabled
-                placeholder="MM / YY"
-                className="w-full bg-zinc-900 border border-zinc-700 px-4 py-2.5 text-sm rounded text-zinc-500 cursor-not-allowed"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] uppercase tracking-widest text-zinc-500">CVV</label>
-              <input
-                type="text"
-                disabled
-                placeholder="•••"
-                className="w-full bg-zinc-900 border border-zinc-700 px-4 py-2.5 text-sm rounded text-zinc-500 cursor-not-allowed"
-              />
-            </div>
-          </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase tracking-widest text-zinc-500">Card Number</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    disabled
+                    placeholder="•••• •••• •••• ••••"
+                    className="w-full bg-zinc-900 border border-zinc-700 px-4 py-2.5 text-sm rounded text-zinc-500 cursor-not-allowed"
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1 opacity-30">
+                    <div className="w-6 h-4 rounded-sm bg-red-500" />
+                    <div className="w-6 h-4 rounded-sm bg-yellow-400 -ml-2 opacity-80" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-500">Expiry</label>
+                  <input
+                    type="text"
+                    disabled
+                    placeholder="MM / YY"
+                    className="w-full bg-zinc-900 border border-zinc-700 px-4 py-2.5 text-sm rounded text-zinc-500 cursor-not-allowed"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-500">CVV</label>
+                  <input
+                    type="text"
+                    disabled
+                    placeholder="•••"
+                    className="w-full bg-zinc-900 border border-zinc-700 px-4 py-2.5 text-sm rounded text-zinc-500 cursor-not-allowed"
+                  />
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="border border-yellow-900/40 bg-yellow-950/10 rounded px-4 py-3">
             <p className="text-[10px] uppercase tracking-widest text-yellow-700 text-center">

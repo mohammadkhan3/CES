@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link"; 
 
 const PASSWORD_RULES = [
   { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
@@ -173,9 +174,19 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-black text-white p-8">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-diplomata text-center mb-10 uppercase tracking-tighter">
+        <h1 className="text-4xl font-diplomata text-center mb-6 uppercase tracking-tighter">
           Manage Profile
         </h1>
+
+        {/* Link to the History / AI page */}
+        <div className="mb-10 flex justify-center">
+          <Link
+            href="/profile/history"
+            className="text-xs uppercase tracking-widest border border-zinc-700 px-6 py-3 hover:border-white hover:text-white transition font-bold text-zinc-400"
+          >
+            View Order History & AI Recommendations →
+          </Link>
+        </div>
 
         {message && (
           <div className={`mb-6 p-4 border text-center font-bold uppercase tracking-widest text-xs ${
