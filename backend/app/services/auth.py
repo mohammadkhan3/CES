@@ -7,7 +7,7 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from app.db import get_users_collection
 from app.security import hash_password, verify_password
-from app.services.email import build_confirmation_link, send_confirmation_email
+from app.services.email import build_confirmation_link, send_confirmation_email, send_password_reset_email
 
 _EMAIL_REGEX = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 _PASSWORD_COMPLEXITY = re.compile(r"^(?=.*[A-Za-z])(?=.*\d).{8,}$")
@@ -184,8 +184,35 @@ def forgot_password(email_raw: str) -> dict:
 
     email_error = None
     try:
-        send_confirmation_email(email_raw, token)
+        send_password_reset_email(email_raw, reset_link)
     except Exception as exc:
         email_error = exc
 
     return {"sent": True, "reset_link": reset_link, "email": email_raw, "email_error": email_error}
+
+
+def reset_password(token: str, new_password: str) -> None:
+    if not token:
+        raise AuthError("Reset token is required.")
+    if not new_password:
+        raise AuthError("New password is required.")
+    if not _PASSWORD_COMPLEXITY.match(new_password):
+        raise AuthError("Password must be at least 8 characters and include a letter and a number.")
+
+    serializer = _get_serializer()
+    try:
+        email = serializer.loads(token, salt="password-reset", max_age=3600)
+    except SignatureExpired:
+        raise AuthError("Reset link has expired. Please request a new one.", 400)
+    except BadSignature:
+        raise AuthError("Invalid reset link.", 400)
+
+    users = get_users_collection()
+    user = users.find_one({"emailLower": email.lower()})
+    if not user:
+        raise AuthError("Invalid reset link.", 400)
+
+    users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"password": hash_password(new_password)}},
+    )
